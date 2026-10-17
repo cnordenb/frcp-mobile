@@ -50,15 +50,15 @@ class DataTest {
             assertTrue("no jingle for ${c.name}", exists(Assets.jingle(c.file, false)))
             if (c.legacy) assertTrue("no legacy jingle for ${c.name}", exists(Assets.jingle(c.file, true)))
         }
-        for (f in listOf(Assets.civIcon(Assets.RANDOM), Assets.jingle(Assets.RANDOM, false), Assets.jingle(Assets.RANDOM, true))) {
+        for (f in listOf(Assets.RANDOM_ICON, Assets.jingle(Assets.RANDOM, false), Assets.jingle(Assets.RANDOM, true))) {
             assertTrue("no $f", exists(f))
         }
     }
 
     @Test
-    fun `the civ icon atlas has a cell for every civ and random`() {
-        val rows = (CIVS.size + 1 + Assets.CIV_ATLAS_COLS - 1) / Assets.CIV_ATLAS_COLS
-        assertEquals(Assets.CIV_ATLAS_COLS * 30 to rows * 30, webpSize(Assets.CIV_ATLAS))
+    fun `the civ icons are PNGs of one size, as random's is`() {
+        val random = webpSize(Assets.RANDOM_ICON)
+        for (c in CIVS) assertEquals("${c.name}'s icon", random, pngSize(Assets.civIcon(c.file)))
     }
 
     @Test

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The themed icon: frcp_icon_monochrome.png is frcp_icon.png with its black made transparent, as the system tints
+     the icon by its alpha alone. It sits where the foreground's artwork does. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/frcp_icon_monochrome"
+    android:inset="17.5%" />

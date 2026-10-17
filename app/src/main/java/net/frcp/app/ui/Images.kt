@@ -22,16 +22,20 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** The images from the assets, each decoded once, on first use. */
+/**
+ * The images from the assets, each decoded once, on first use or ahead of it from another thread. They have mipmaps,
+ * so the civ icons stay smooth at the small sizes of the logs and the Pool tab.
+ */
 class Images(private val assets: AssetManager) {
-    private val bitmaps = HashMap<String, ImageBitmap>()
+    private val bitmaps = ConcurrentHashMap<String, ImageBitmap>()
     private val slices = HashMap<String, NineSlice>()
 
-    operator fun get(path: String): ImageBitmap = bitmaps.getOrPut(path) {
-        assets.open(path).use { BitmapFactory.decodeStream(it) }.asImageBitmap()
+    operator fun get(path: String): ImageBitmap = bitmaps.computeIfAbsent(path) {
+        assets.open(path).use { BitmapFactory.decodeStream(it) }.apply { setHasMipMap(true) }.asImageBitmap()
     }
 
     fun nineSlice(path: String, slice: Int): NineSlice = slices.getOrPut(path) { NineSlice(get(path).asAndroidBitmap(), slice) }

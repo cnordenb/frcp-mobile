@@ -1,45 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The random civ's gold shield with its question mark, drawn within the adaptive icon's 66 dp safe zone. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <path
-        android:pathData="M31,31 Q54,23 77,31 L77,53 Q77,75 54,86 Q31,75 31,53 Z"
-        android:strokeWidth="3"
-        android:strokeColor="#FF7A4E00">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:endX="54"
-                android:endY="86"
-                android:startX="54"
-                android:startY="25"
-                android:type="linear">
-                <item android:color="#FFFFE97A" android:offset="0" />
-                <item android:color="#FFF5C518" android:offset="0.55" />
-                <item android:color="#FFD99A00" android:offset="1" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path
-        android:pathData="M46,46 Q46,37 54,37 Q62,37 62,45 Q62,51 56,54 Q54,55 54,58 L54,58"
-        android:strokeWidth="9"
-        android:strokeColor="#FF5A3A00"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:pathData="M46,46 Q46,37 54,37 Q62,37 62,45 Q62,51 56,54 Q54,55 54,58 L54,58"
-        android:strokeWidth="5.5"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:fillColor="#FF5A3A00"
-        android:pathData="M54,70.5 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M54,70.5 m-3.2,0 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0" />
-</vector>
+<!-- frcp_icon.png, drawn at about 70 of the adaptive icon's 108 dp, so that the whole of its question mark and sparkles
+     falls within the 66 dp circle that every launcher's mask shows. Its black square meets the black background. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/frcp_icon"
+    android:inset="17.5%" />

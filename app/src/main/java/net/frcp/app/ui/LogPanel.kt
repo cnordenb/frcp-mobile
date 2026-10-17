@@ -63,7 +63,6 @@ private object NoFling : FlingBehavior {
 @Composable
 fun LogPanel(rounds: List<List<LogRow>>, description: String, modifier: Modifier = Modifier) {
     val images = LocalImages.current
-    val atlas = images[Assets.CIV_ATLAS]
     // The rounds' rows one after another, with null for the blank line between two rounds
     val lines = remember(rounds) { rounds.flatMapIndexed { i, rows -> if (i == 0) rows else listOf(null) + rows } }
     val list = rememberLazyListState()
@@ -84,7 +83,7 @@ fun LogPanel(rounds: List<List<LogRow>>, description: String, modifier: Modifier
                     Spacer(Modifier.height(ROW_HEIGHT))
                 } else {
                     Row(Modifier.height(ROW_HEIGHT), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(18.dp).drawBehind { drawCell(atlas, row.civ, Assets.CIV_ATLAS_COLS) })
+                        Box(Modifier.size(18.dp).image(images[row.icon]))
                         Label(row.text, color = Ink.LogText, oneLine = true)
                     }
                 }

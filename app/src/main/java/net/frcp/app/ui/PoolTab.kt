@@ -51,7 +51,6 @@ fun PoolTab(vm: PickerViewModel, topInset: Dp) {
     val info = logic.editionInfo.getValue(ed)
     val images = LocalImages.current
     val dlcAtlas = images[Assets.DLC_ATLAS]
-    val civAtlas = images[Assets.CIV_ATLAS]
     val dlcIcons = remember(logic) { logic.dlcs.values.filter { it.hasIcon }.map { it.key } }
     fun isOn(id: Int) = id !in view.state.off
 
@@ -86,7 +85,7 @@ fun PoolTab(vm: PickerViewModel, topInset: Dp) {
                     for (dlc in pair) {
                         val on = logic.civs.any { it.dlc == dlc && logic.inEdition(it, ed) && isOn(it.id) }
                         Toggle(logic.dlcs.getValue(dlc).name, on, { vm.toggleDlc(dlc) }, Modifier.weight(1f).height(maxOf(info.toggleSize, 22).dp), info.toggleGap.dp) {
-                            ToggleIcon(dlcAtlas, 3 * logic.editions.size + dlcIcons.indexOf(dlc), Assets.DLC_ATLAS_COLS, on, info.toggleSize.dp)
+                            ToggleIcon(dlcAtlas, on, info.toggleSize.dp, 3 * logic.editions.size + dlcIcons.indexOf(dlc), Assets.DLC_ATLAS_COLS)
                         }
                     }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -97,7 +96,7 @@ fun PoolTab(vm: PickerViewModel, topInset: Dp) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
             for (row in logic.displayOrder.filter { logic.inEdition(it, ed) }.chunked(3)) {
                 Row(Modifier.height(24.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (c in row) CivToggle(c, isOn(c.id), civAtlas, { vm.toggleCiv(c.id) }, Modifier.weight(1f).fillMaxHeight())
+                    for (c in row) CivToggle(c, isOn(c.id), images[Assets.civIcon(c.file)], { vm.toggleCiv(c.id) }, Modifier.weight(1f).fillMaxHeight())
                     repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -135,8 +134,8 @@ private fun EditionRow(index: Int, text: String, selected: Boolean, onClick: () 
 }
 
 @Composable
-private fun CivToggle(c: Civ, on: Boolean, atlas: ImageBitmap, onToggle: () -> Unit, modifier: Modifier) =
-    Toggle(c.name, on, onToggle, modifier, 2.dp) { ToggleIcon(atlas, c.id, Assets.CIV_ATLAS_COLS, on, 18.dp) }
+private fun CivToggle(c: Civ, on: Boolean, icon: ImageBitmap, onToggle: () -> Unit, modifier: Modifier) =
+    Toggle(c.name, on, onToggle, modifier, 2.dp) { ToggleIcon(icon, on, 18.dp) }
 
 /** A civ or DLC toggle: its icon stands in for the checkbox, and its name is bold while on and struck through while off. */
 @Composable

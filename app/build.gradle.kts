@@ -67,7 +67,8 @@ tasks.register<Copy>("syncWebAssets") {
     group = "frcp"
     description = "Copies data.json and the images and sounds the app uses from the web version."
     from(webDir) {
-        include("data.json", "images/civ/*.webp", "images/dlc/*_atlas.webp", "sounds/civ/**/*.webm", "sounds/ui/*.webm")
+        // The app has civ icons of its own, PNGs that are sharper than the web version's, so only random's comes over.
+        include("data.json", "images/civ/random.webp", "images/dlc/*_atlas.webp", "sounds/civ/**/*.webm", "sounds/ui/*.webm")
         include(uiImages.map { "images/ui/$it.webp" })
         // A touch has no hover.
         exclude("sounds/ui/hover_sound.webm")

@@ -6,7 +6,7 @@ import net.frcp.app.logic.PickerState
 import net.frcp.app.logic.SharedLink
 
 /** One line of a log: a civ's icon and its text. */
-class LogRow(val civ: Int, val text: String)
+class LogRow(val icon: String, val text: String)
 
 /**
  * What the screen shows of the picker, worked out once per change, as the web version's render() does. [state] is a
@@ -22,14 +22,14 @@ class PickerView(logic: Logic, val state: PickerState, val flash: String?) {
     /** The drawn log's rounds, newest first, each listing its draws newest first. */
     val drawnRounds: List<List<LogRow>> = state.log.asReversed().filter { it.isNotEmpty() }.map { r ->
         r.asReversed().map { d ->
-            val name = logic.civs[d.id].name
-            LogRow(d.id, if (d.k != 0) "$name (${d.k}/${d.n})" else name)
+            val civ = logic.civs[d.id]
+            LogRow(Assets.civIcon(civ.file), if (d.k != 0) "${civ.name} (${d.k}/${d.n})" else civ.name)
         }
     }
 
     /** The civs left this round, in alphabetical order. */
     val remainingRows: List<LogRow> = remaining.toSet().let { left ->
-        logic.displayOrder.filter { it.id in left }.map { LogRow(it.id, it.name) }
+        logic.displayOrder.filter { it.id in left }.map { LogRow(Assets.civIcon(it.file), it.name) }
     }
 }
 

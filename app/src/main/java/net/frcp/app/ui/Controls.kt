@@ -134,15 +134,17 @@ fun CheckRow(
 }
 
 /**
- * The atlas cell that stands in for a civ's or DLC's checkbox. While it's off, it turns grey under the off cross,
- * drawn at 90 % of its size.
+ * The icon that stands in for a civ's or DLC's checkbox: the whole of [image], or its [cell] in an atlas of [cols]
+ * cells per row. While it's off, it turns grey under the off cross, drawn at 90 % of its size.
  */
 @Composable
-fun ToggleIcon(atlas: ImageBitmap, cell: Int, cols: Int, on: Boolean, size: Dp) {
+fun ToggleIcon(image: ImageBitmap, on: Boolean, size: Dp, cell: Int? = null, cols: Int = 1) {
     val cross = LocalImages.current[Assets.ui("off")]
     Box(
         Modifier.size(size).drawBehind {
-            drawCell(atlas, cell, cols, colorFilter = if (on) null else Grayscale)
+            val filter = if (on) null else Grayscale
+            if (cell == null) drawPart(image, 0, 0, image.width, image.height, colorFilter = filter)
+            else drawCell(image, cell, cols, colorFilter = filter)
             if (!on) {
                 val side = (this.size.width * 0.9f).roundToInt()
                 val at = ((this.size.width - side) / 2).roundToInt()

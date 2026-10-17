@@ -50,6 +50,13 @@ fun chiSquareLimit(df: Int): Double {
     return df * (1 - 2.0 / (9 * df) + z * sqrt(2.0 / (9 * df))).pow(3)
 }
 
+/** Width and height from a PNG file's header. */
+fun pngSize(rel: String): Pair<Int, Int> {
+    val b = ByteBuffer.wrap(File(ASSETS, rel).readBytes())
+    check(String(ByteArray(3) { b.get(1 + it) }, Charsets.US_ASCII) == "PNG") { "$rel isn't a PNG file" }
+    return b.getInt(16) to b.getInt(20)
+}
+
 /** Width and height from a WebP file's header, for the lossy, lossless and extended formats. */
 fun webpSize(rel: String): Pair<Int, Int> {
     val b = ByteBuffer.wrap(File(ASSETS, rel).readBytes()).order(ByteOrder.LITTLE_ENDIAN)

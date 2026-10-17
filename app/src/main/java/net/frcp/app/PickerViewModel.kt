@@ -35,7 +35,7 @@ class PickerViewModel(app: Application) : AndroidViewModel(app) {
     val logic = Logic(GameData.parse(app.assets.open(Assets.DATA).bufferedReader().use { it.readText() }))
     val images = Images(app.assets)
 
-    /** The icon cell of random, after every civ's, as in the civ atlas. */
+    /** The icon cell that stands for random: after every civ's, as in the web version's civ atlas. */
     val randomCell = logic.civs.size
 
     private val store = Store(app)
@@ -67,6 +67,10 @@ class PickerViewModel(app: Application) : AndroidViewModel(app) {
     init {
         for (s in UiSound.entries) sounds.load(Assets.uiSound(s.file))
         loadAhead()
+        // The civ icons decode away from the screen's thread, ready for the logs and the Pool tab.
+        viewModelScope.launch(Dispatchers.Default) {
+            for (c in logic.civs) images[Assets.civIcon(c.file)]
+        }
     }
 
     override fun onCleared() {

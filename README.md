@@ -15,7 +15,7 @@ The rules in `app/src/main/java/net/frcp/app/logic/` are a port of the web versi
 - **Presets:** the desktop app's `.txt` files.
 - **Saved state and settings:** the same JSON as the browser keeps.
 
-The app's `data.json`, images and sounds are copies of the web version's. After those change in [frcp_html](https://github.com/cnordenb/frcp_html), copy them over from a checkout beside this one:
+The app's `data.json`, images and sounds are copies of the web version's, except the civ icons: the app has its own lossless PNGs in `app/src/main/assets/images/civ/`, so a new civ needs its PNG added there by hand. After the shared files change in [frcp_html](https://github.com/cnordenb/frcp_html), copy them over from a checkout beside this one:
 
 ```
 ./gradlew syncWebAssets syncWebTestFixtures

@@ -301,6 +301,6 @@ fun DrawTab(vm: PickerViewModel, topInset: Dp, swipeAllowed: () -> Boolean) {
 /** A civ's own icon, or random's, filling its place. */
 @Composable
 private fun CivIcon(vm: PickerViewModel, cell: Int, modifier: Modifier) {
-    val file = if (cell == vm.randomCell) Assets.RANDOM else vm.logic.civs[cell].file
-    Box(modifier.size(144.dp).image(LocalImages.current[Assets.civIcon(file)]))
+    val path = if (cell == vm.randomCell) Assets.RANDOM_ICON else Assets.civIcon(vm.logic.civs[cell].file)
+    Box(modifier.size(144.dp).image(LocalImages.current[path]))
 }
