@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The parchment's colour shows while the app starts, until the background image draws over it. -->
+    <style name="Theme.Frcp" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/parchment</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <color name="parchment">#FFD9B48F</color>
+    <color name="launcher_background">#FF65523B</color>
+</resources>

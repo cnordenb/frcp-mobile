@@ -1,0 +1,31 @@
+package net.frcp.app
+
+import android.content.Intent
+import android.graphics.Color
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import net.frcp.app.ui.AppScreen
+
+class MainActivity : ComponentActivity() {
+    private val vm: PickerViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // The parchment runs under the status and navigation bars, whose icons stay dark on it.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) vm.onLaunch(intent?.dataString)
+        setContent { AppScreen(vm) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        vm.onLink(intent.dataString)
+    }
+}
