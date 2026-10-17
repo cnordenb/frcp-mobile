@@ -26,9 +26,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -44,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import net.frcp.app.Assets
@@ -70,7 +73,8 @@ fun AppScreen(vm: PickerViewModel) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Ink.Parchment)
+                // Black shows past the parchment's torn edges.
+                .background(Color.Black)
                 .image(vm.images[Assets.ui("background_mobile")])
                 // A press outside the open menu closes it, and still reaches what it lands on.
                 .pointerInput(Unit) {
@@ -82,13 +86,7 @@ fun AppScreen(vm: PickerViewModel) {
                 },
         ) {
             Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    when (vm.tab) {
-                        0 -> DrawTab(vm, topInset) { !press.closedMenu && !vm.menuOpen }
-                        1 -> LogTab(vm, topInset)
-                        else -> PoolTab(vm, topInset)
-                    }
-                }
+                Tabs(vm, topInset, Modifier.weight(1f).fillMaxWidth()) { !press.closedMenu && !vm.menuOpen }
                 TabBar(vm)
             }
             MainMenu(
@@ -103,6 +101,42 @@ fun AppScreen(vm: PickerViewModel) {
         }
         Effects(vm)
     }
+}
+
+/**
+ * The three tabs. They all stay built, as the web page's do, so switching tabs only shows another one: the tab on
+ * show is placed, and the others are laid out but left unplaced, so they neither draw nor take touches. The two not
+ * on show at the start are built once the first frame is up, so they don't hold up the app's opening.
+ */
+@Composable
+private fun Tabs(vm: PickerViewModel, topInset: Dp, modifier: Modifier, swipeAllowed: () -> Boolean) {
+    var built by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // The first wait ends as the first frame starts, the second once it's drawn.
+        repeat(2) { withFrameNanos { } }
+        built = true
+    }
+    Box(modifier) {
+        for (i in 0..2) {
+            key(i) {
+                val shown = i == vm.tab
+                if (shown || built) {
+                    Box(Modifier.fillMaxSize().then(if (shown) Modifier else Unplaced)) {
+                        when (i) {
+                            0 -> DrawTab(vm, topInset, swipeAllowed)
+                            1 -> LogTab(vm, topInset)
+                            else -> PoolTab(vm, topInset)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val Unplaced = Modifier.layout { measurable, constraints ->
+    val p = measurable.measure(constraints)
+    layout(p.width, p.height) {}
 }
 
 /**

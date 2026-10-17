@@ -1,8 +1,6 @@
 package net.frcp.app.ui
 
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -10,7 +8,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,8 +18,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -30,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -57,25 +57,32 @@ private object NoFling : FlingBehavior {
 /**
  * A sunken brown log panel of rounds of rows, each led by its civ's icon, with a blank line between the rounds. While
  * it overflows, a scrollbar in the game's style lies over its right side.
+ *
+ * Only the lines on screen are built, so a long log costs no more to show than a short one.
  */
 @Composable
 fun LogPanel(rounds: List<List<LogRow>>, description: String, modifier: Modifier = Modifier) {
     val images = LocalImages.current
     val atlas = images[Assets.CIV_ATLAS]
-    val scroll = rememberScrollState()
-    val hasBar = scroll.maxValue in 1 until Int.MAX_VALUE
+    // The rounds' rows one after another, with null for the blank line between two rounds
+    val lines = remember(rounds) { rounds.flatMapIndexed { i, rows -> if (i == 0) rows else listOf(null) + rows } }
+    val list = rememberLazyListState()
+    val hasBar = list.canScrollForward || list.canScrollBackward
     Box(modifier.background(Ink.LogBack).nineSlice(images.nineSlice(Assets.ui("log_9slice"), 6), 6.dp)) {
-        Column(
+        LazyColumn(
             Modifier
                 .fillMaxSize()
                 .padding(6.dp)
-                .verticalScroll(scroll, flingBehavior = NoFling)
-                .semantics { contentDescription = description }
-                .padding(start = 8.dp, top = 6.dp, bottom = 6.dp, end = if (hasBar) 29.dp else 2.dp),
+                .semantics { contentDescription = description },
+            state = list,
+            contentPadding = PaddingValues(start = 8.dp, top = 6.dp, bottom = 6.dp, end = if (hasBar) 29.dp else 2.dp),
+            flingBehavior = NoFling,
         ) {
-            rounds.forEachIndexed { i, rows ->
-                if (i > 0) Spacer(Modifier.height(ROW_HEIGHT))
-                for (row in rows) {
+            items(lines.size, contentType = { if (lines[it] == null) 0 else 1 }) { i ->
+                val row = lines[i]
+                if (row == null) {
+                    Spacer(Modifier.height(ROW_HEIGHT))
+                } else {
                     Row(Modifier.height(ROW_HEIGHT), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(18.dp).drawBehind { drawCell(atlas, row.civ, Assets.CIV_ATLAS_COLS) })
                         Label(row.text, color = Ink.LogText, oneLine = true)
@@ -83,7 +90,7 @@ fun LogPanel(rounds: List<List<LogRow>>, description: String, modifier: Modifier
                 }
             }
         }
-        if (hasBar) LogScrollBar(scroll, Modifier.align(Alignment.TopEnd).padding(6.dp).fillMaxHeight().width(27.dp))
+        if (hasBar) LogScrollBar(list, Modifier.align(Alignment.TopEnd).padding(6.dp).fillMaxHeight().width(27.dp))
     }
 }
 
@@ -96,16 +103,22 @@ private val ROW_HEIGHT = 20.dp
  * bottom, 27 px square each, and the track stretches its middle.
  */
 @Composable
-private fun LogScrollBar(scroll: ScrollState, modifier: Modifier) {
+private fun LogScrollBar(list: LazyListState, modifier: Modifier) {
     val images = LocalImages.current
     val bar = images[Assets.ui("scrollbar_3slice")]
     val knob = images[Assets.ui("scrollbar_knob")]
     val density = LocalDensity.current
-    val line = with(density) { ROW_HEIGHT.toPx() }
+    val line = with(density) { ROW_HEIGHT.roundToPx().toFloat() }
     val knobSize = with(density) { 21.dp.toPx() }
     var trackHeight by remember { mutableFloatStateOf(0f) }
-    fun knobTop() = if (scroll.maxValue <= 0) 0f else min(1f, scroll.value.toFloat() / scroll.maxValue) * (trackHeight - knobSize)
-    fun page() = max(line, scroll.viewportSize - line)
+    // Every line of a log is a row high, so how far the log has scrolled, and how far it can, follow from its lines.
+    fun scrolled() = list.firstVisibleItemIndex * line + list.firstVisibleItemScrollOffset
+    fun range() = list.layoutInfo.let { it.totalItemsCount * line + it.beforeContentPadding + it.afterContentPadding - it.viewportSize.height }
+    fun knobTop(): Float {
+        val p = if (!list.canScrollForward) 1f else if (range() <= 0f) 0f else min(1f, scrolled() / range())
+        return p * (trackHeight - knobSize)
+    }
+    fun page() = max(line, list.layoutInfo.viewportSize.height - line)
 
     Box(modifier) {
         Box(
@@ -113,7 +126,7 @@ private fun LogScrollBar(scroll: ScrollState, modifier: Modifier) {
                 .align(Alignment.TopCenter)
                 .size(27.dp)
                 .drawBehind { drawPart(bar, 0, 0, 27, 27) }
-                .pointerInput(Unit) { pressAndRepeat { scroll.dispatchRawDelta(-line) != 0f } },
+                .pointerInput(Unit) { pressAndRepeat { list.dispatchRawDelta(-line) != 0f } },
         )
         Box(
             Modifier
@@ -131,18 +144,18 @@ private fun LogScrollBar(scroll: ScrollState, modifier: Modifier) {
                             if (down.position.y in top..top + knobSize) {
                                 // Dragging the knob scrolls in proportion, the track's free length standing for the hidden part of the log.
                                 val y0 = down.position.y
-                                val value0 = scroll.value
-                                val ratio = scroll.maxValue / max(1f, trackHeight - knobSize)
+                                val scrolled0 = scrolled()
+                                val ratio = range() / max(1f, trackHeight - knobSize)
                                 drag(down.id) {
                                     it.consume()
-                                    scroll.dispatchRawDelta(value0 + (it.position.y - y0) * ratio - scroll.value)
+                                    list.dispatchRawDelta(scrolled0 + (it.position.y - y0) * ratio - scrolled())
                                 }
                             } else {
                                 val dir = if (down.position.y < top) -1 else 1
                                 repeatWhileHeld(scope, down) { y ->
                                     val t = knobTop()
                                     val reached = if (dir < 0) y >= t else y < t + knobSize
-                                    !reached && scroll.dispatchRawDelta(dir * page()) != 0f
+                                    !reached && list.dispatchRawDelta(dir * page()) != 0f
                                 }
                             }
                         }
@@ -161,7 +174,7 @@ private fun LogScrollBar(scroll: ScrollState, modifier: Modifier) {
                 .align(Alignment.BottomCenter)
                 .size(27.dp)
                 .drawBehind { drawPart(bar, 0, 54, 27, 27) }
-                .pointerInput(Unit) { pressAndRepeat { scroll.dispatchRawDelta(line) != 0f } },
+                .pointerInput(Unit) { pressAndRepeat { list.dispatchRawDelta(line) != 0f } },
         )
     }
 }

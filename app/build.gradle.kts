@@ -25,6 +25,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Until the app has an upload key of its own, release builds are signed with the debug key, so they
+            // install on a phone for testing and update a debug build in place. Google Play refuses them.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

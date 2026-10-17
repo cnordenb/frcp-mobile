@@ -33,7 +33,6 @@ object Ink {
     val Toast = Color(0xFF2B2B2B)
     val Field = Color(0xFF474747)
     val Group = Color(0x593C2814)
-    val Parchment = Color(0xFFD9B48F)
 }
 
 /** A civ or DLC that's off turns grey. */
