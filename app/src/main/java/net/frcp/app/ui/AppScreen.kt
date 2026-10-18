@@ -1,5 +1,6 @@
 package net.frcp.app.ui
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -13,18 +14,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.tappableElement
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -43,13 +48,16 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
-import net.frcp.app.Assets
 import net.frcp.app.Effect
 import net.frcp.app.PickerViewModel
 import net.frcp.app.Toast
@@ -60,22 +68,29 @@ private class MenuPress {
 }
 
 /**
- * The whole screen, as frcp.net's phone layout: the parchment fills it, the tabs fill the bottom edge and a hamburger
- * menu at the top right stands in for the menu bar. Status messages show just over the tab bar.
+ * The whole screen, as frcp.net's phone layout: the parchment page with its tabs along the bottom, and a hamburger
+ * menu at the top right that stands in for the menu bar. The page fills the screen, under the status bar and a
+ * gesture bar, whose icons are dark on it. A navigation bar of buttons takes taps, so the page stops above it, and
+ * its buttons are light on the black under it. The tabs' content keeps within the page's burnt border and clear of the
+ * status bar. Status messages show just over the tabs.
  */
 @Composable
 fun AppScreen(vm: PickerViewModel) {
     CompositionLocalProvider(LocalImages provides vm.images, LocalOverscrollFactory provides null) {
-        val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val press = remember { MenuPress() }
         var menuBounds by remember { mutableStateOf(Rect.Zero) }
+        val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val underNavBar = WindowInsets.tappableElement.getBottom(LocalDensity.current) == 0
+        val view = LocalView.current
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = underNavBar
+        }
         BackHandler(enabled = vm.menuOpen, onBack = vm::closeMenu)
         Box(
             Modifier
                 .fillMaxSize()
-                // Black shows past the parchment's torn edges.
                 .background(Color.Black)
-                .image(vm.images[Assets.ui("background_mobile")])
                 // A press outside the open menu closes it, and still reaches what it lands on.
                 .pointerInput(Unit) {
                     awaitEachGesture {
@@ -85,18 +100,23 @@ fun AppScreen(vm: PickerViewModel) {
                     }
                 },
         ) {
-            Column(Modifier.fillMaxSize()) {
-                Tabs(vm, topInset, Modifier.weight(1f).fillMaxWidth()) { !press.closedMenu && !vm.menuOpen }
-                TabBar(vm)
+            BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.tappableElement.only(WindowInsetsSides.Bottom))) {
+                val page = Page(maxWidth, maxHeight)
+                val top = max(page.top, statusBar)
+                Box(Modifier.fillMaxSize().pageArt(vm.images, vm.tab))
+                Tabs(vm, top, Modifier.fillMaxSize().padding(start = page.left, end = page.right, bottom = page.bottom)) {
+                    !press.closedMenu && !vm.menuOpen
+                }
+                page.TabBar(vm)
+                MainMenu(
+                    vm,
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = top + 10.dp, end = page.right)
+                        .onGloballyPositioned { menuBounds = it.boundsInRoot() },
+                )
+                ToastView(vm.toast, Modifier.align(Alignment.TopCenter).offset(y = page.tabTop - 12.dp))
             }
-            MainMenu(
-                vm,
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 10.dp + topInset, end = 12.dp)
-                    .onGloballyPositioned { menuBounds = it.boundsInRoot() },
-            )
-            ToastView(vm.toast, Modifier.align(Alignment.BottomCenter))
             Dialogs(vm)
         }
         Effects(vm)
@@ -109,7 +129,7 @@ fun AppScreen(vm: PickerViewModel) {
  * on show at the start are built once the first frame is up, so they don't hold up the app's opening.
  */
 @Composable
-private fun Tabs(vm: PickerViewModel, topInset: Dp, modifier: Modifier, swipeAllowed: () -> Boolean) {
+private fun Tabs(vm: PickerViewModel, pageTop: Dp, modifier: Modifier, swipeAllowed: () -> Boolean) {
     var built by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         // The first wait ends as the first frame starts, the second once it's drawn.
@@ -123,9 +143,9 @@ private fun Tabs(vm: PickerViewModel, topInset: Dp, modifier: Modifier, swipeAll
                 if (shown || built) {
                     Box(Modifier.fillMaxSize().then(if (shown) Modifier else Unplaced)) {
                         when (i) {
-                            0 -> DrawTab(vm, topInset, swipeAllowed)
-                            1 -> LogTab(vm, topInset)
-                            else -> PoolTab(vm, topInset)
+                            0 -> DrawTab(vm, pageTop, swipeAllowed)
+                            1 -> LogTab(vm, pageTop)
+                            else -> PoolTab(vm, pageTop)
                         }
                     }
                 }
@@ -139,10 +159,7 @@ private val Unplaced = Modifier.layout { measurable, constraints ->
     layout(p.width, p.height) {}
 }
 
-/**
- * A status message, for 2.2 seconds. It sits its own height lower than 12 dp over the tab bar, so it reaches over the
- * tab bar's top edge.
- */
+/** A status message, for 2.2 seconds. Its top sits 12 dp over the tabs, so it reaches over their top edge. */
 @Composable
 private fun ToastView(toast: Toast?, modifier: Modifier) {
     var shown by remember { mutableStateOf(false) }
@@ -156,12 +173,6 @@ private fun ToastView(toast: Toast?, modifier: Modifier) {
     if (toast == null || alpha == 0f) return
     Box(
         modifier
-            .navigationBarsPadding()
-            .padding(bottom = 76.dp)
-            .layout { measurable, constraints ->
-                val p = measurable.measure(constraints)
-                layout(p.width, p.height) { p.place(0, p.height) }
-            }
             .alpha(alpha)
             .shadow(4.dp, RoundedCornerShape(3.dp))
             .background(Ink.Toast, RoundedCornerShape(3.dp))

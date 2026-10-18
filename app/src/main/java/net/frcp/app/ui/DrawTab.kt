@@ -59,8 +59,41 @@ private val SwipeKind.edge
         SwipeKind.Reroll -> 0f to 1f
     }
 
-private fun swipeKind(horizontal: Boolean, d: Float) =
+/** What a swipe [d] px along its axis does: left draws, right undoes, up re-rolls and down resets. */
+internal fun swipeKind(horizontal: Boolean, d: Float) =
     if (horizontal) (if (d < 0) SwipeKind.Draw else SwipeKind.Undo) else (if (d < 0) SwipeKind.Reroll else SwipeKind.Reset)
+
+/**
+ * The axis a finger [dx], [dy] px from where it went down settles: none while it's within [slop] px, and then
+ * horizontal (true) when it has gone further sideways than up or down.
+ */
+internal fun swipeAxis(dx: Float, dy: Float, slop: Float): Boolean? =
+    if (max(abs(dx), abs(dy)) < slop) null else abs(dx) > abs(dy)
+
+/** Where an icon sits on a swipe: how far towards the swipe's edge, and how opaque. */
+internal data class IconPlace(val distance: Float, val alpha: Float)
+
+/**
+ * Where a swipe of [kind] at progress [t] of [travel] puts the civ icon and the ghost, the ghost null while hidden.
+ * Until the swipe [acted], the civ icon shows the current civ and the ghost the civ coming in. Acting puts the new civ
+ * on the civ icon, so the two swap places.
+ */
+internal fun swipePlaces(kind: SwipeKind, t: Float, travel: Float, acted: Boolean): Pair<IconPlace, IconPlace?> {
+    val p = t / travel
+    if (kind == SwipeKind.Draw) {
+        val leaving = IconPlace(t, 1 - p)
+        return if (acted) IconPlace(0f, 1f) to leaving else leaving to null
+    }
+    val fading = IconPlace(0f, 1 - p)
+    val coming = IconPlace(travel - t, p)
+    return if (acted) coming to fading else fading to coming
+}
+
+/**
+ * How long a lifted swipe glides [distance] px, starting at the finger's [speed] in px per ms and slowing to a stop:
+ * the ease-out starts at twice its average speed, hence the doubled distance. Between 80 and 350 ms.
+ */
+internal fun glideMillis(distance: Float, speed: Float) = (2 * distance / max(speed, 0.1f)).coerceIn(80f, 350f)
 
 /** The civ icon's and the swipe ghost's offsets and opacities while a swipe moves them, and the ghost's civ. */
 private class SwipeLook {
@@ -121,7 +154,7 @@ private class Swipe(val x: Float, val y: Float) {
  * finger's speed. A swipe with nothing to do, such as undoing with nothing to undo, moves nothing.
  */
 @Composable
-fun DrawTab(vm: PickerViewModel, topInset: Dp, swipeAllowed: () -> Boolean) {
+fun DrawTab(vm: PickerViewModel, pageTop: Dp, swipeAllowed: () -> Boolean) {
     val view = vm.view
     val settings = vm.settings
     val current = view.current
@@ -140,21 +173,14 @@ fun DrawTab(vm: PickerViewModel, topInset: Dp, swipeAllowed: () -> Boolean) {
         },
     )
 
-    // Places the icons for the swipe's progress s.t, from 0 to s.travel. Until the swipe acts, the civ icon shows the
-    // current civ and the ghost the civ coming in. Acting puts the new civ on the civ icon, so the two swap places.
+    // Places the icons for the swipe's progress s.t, from 0 to s.travel
     fun paint(s: Swipe) {
         val kind = s.kind ?: return
         if (!s.moves) return
-        val p = s.t / s.travel
-        val currentIsIcon = !s.acted
-        if (kind == SwipeKind.Draw) {
-            look.place(currentIsIcon, kind.edge, s.t, 1 - p)
-            if (s.acted) look.place(true, kind.edge, 0f, 1f)
-        } else {
-            look.place(currentIsIcon, kind.edge, 0f, 1 - p)
-            look.place(!currentIsIcon, kind.edge, s.travel - s.t, p)
-        }
-        look.ghostShown = kind != SwipeKind.Draw || s.acted
+        val (icon, ghost) = swipePlaces(kind, s.t, s.travel, s.acted)
+        look.place(true, kind.edge, icon.distance, icon.alpha)
+        if (ghost != null) look.place(false, kind.edge, ghost.distance, ghost.alpha)
+        look.ghostShown = ghost != null
     }
 
     // Sets what the swipe does from the way it now points, and the civ the ghost shows coming in
@@ -177,15 +203,14 @@ fun DrawTab(vm: PickerViewModel, topInset: Dp, swipeAllowed: () -> Boolean) {
         paint(s)
     }
 
-    // Takes the swipe's progress to `to`, starting at the finger's speed over its last 100 ms and slowing to a stop.
-    // The ease-out starts at twice its average speed, hence the doubled distance.
+    // Takes the swipe's progress to `to`, starting at the finger's speed over its last 100 ms and slowing to a stop
     fun glideTo(s: Swipe, to: Float) {
         if (!s.moves || s.trail.isEmpty()) return
         val (t0, d0) = s.trail.first()
         val (t1, d1) = s.trail.last()
         val speed = if (t1 > t0) abs(d1 - d0) / (t1 - t0) else 0f
         val from = s.t
-        val ms = (2 * abs(to - from) / max(speed, 0.1f)).coerceIn(80f, 350f)
+        val ms = glideMillis(abs(to - from), speed)
         look.glide = scope.launch {
             val start = withFrameMillis { it }
             while (true) {
@@ -240,10 +265,7 @@ fun DrawTab(vm: PickerViewModel, topInset: Dp, swipeAllowed: () -> Boolean) {
                                 break
                             }
                             if (s.horizontal == null) {
-                                val dx = change.position.x - s.x
-                                val dy = change.position.y - s.y
-                                if (max(abs(dx), abs(dy)) < slop) continue
-                                s.horizontal = abs(dx) > abs(dy)
+                                s.horizontal = swipeAxis(change.position.x - s.x, change.position.y - s.y, slop) ?: continue
                             }
                             change.consume()
                             follow(s, change)
@@ -256,7 +278,7 @@ fun DrawTab(vm: PickerViewModel, topInset: Dp, swipeAllowed: () -> Boolean) {
             },
     ) {
         Column(
-            Modifier.fillMaxSize().padding(top = 10.dp + topInset, start = 14.dp, end = 14.dp, bottom = 10.dp),
+            Modifier.fillMaxSize().padding(top = 10.dp + pageTop, bottom = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.CenterStart) {

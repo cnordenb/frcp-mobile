@@ -29,14 +29,18 @@ Open the folder in Android Studio, or build from the command line with JDK 17 or
 
 ```
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest    # the rules, the data and the assets
+./gradlew testDebugUnitTest    # the unit tests, below
 ```
 
 The build needs Android SDK platform 37.2, which Android Studio installs. `gradle.properties` sets `android.overridePathCheck=true`, as the Android Gradle plugin otherwise refuses a project path with non-ASCII characters, such as one under `C:\Users\Hjörleif`.
 
 ## Tests
 
-The unit tests in `app/src/test/` port the web version's `tests/` one for one, against the same fixtures: civ data and its icons, atlases and jingles, saved state, drawing and continuous freshness, share links and preset files.
+The unit tests in `app/src/test/` run on the JVM, without a phone or an emulator:
+
+- **`logic/`** ports the web version's `tests/` one for one, against the same fixtures: civ data and its icons, atlases and jingles, saved state, drawing and continuous freshness, share links and preset files.
+- **The view model**, as the desktop app's model tests have it: draws, undo and redo, re-rolls and resets, the civ each swipe shows coming in, the pool's editions and DLC toggles, auto-reset and auto-toggle, share links and presets in and out, settings in the web version's format, and the sounds each action plays. Stand-ins for the phone's storage, sounds and files (`TestPicker.kt`) keep what the view model saved and played.
+- **`ui/`**, as the desktop app's `ParchmentGeometryTest`: the swipes' directions and how the icons follow the finger, the slider, the logs' scrollbar and nine-slice tiles, the Pool tab's fixed civ grid and DLC toggles, text contrast (WCAG 1.4.3), and the page art against the places `Page` measures on it, so new art that doesn't fit fails a test.
 
 ## Opening frcp.net links in the app
 

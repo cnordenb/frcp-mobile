@@ -57,10 +57,11 @@ dependencies {
 // test fixtures that the app shares with it. These tasks copy them from frcpWebDir, ../frcp_html by default, after
 // the web version changes them. Run them on their own: ./gradlew syncWebAssets syncWebTestFixtures
 val webDir = rootProject.layout.projectDirectory.dir(providers.gradleProperty("frcpWebDir").getOrElse("../frcp_html"))
+// The page and its tab strips (images/ui/*.png) are the app's own, so they aren't among these.
 val uiImages = listOf(
-    "background_mobile", "mobile_tabs", "button", "button_pressed", "button_9slice", "button_pressed_9slice",
-    "checkbox", "log_9slice", "panel_9slice", "off", "scrollbar_3slice", "scrollbar_knob", "share_icon", "slider",
-    "slider_knob", "textfield_9slice", "dropdown_button", "external",
+    "button", "button_pressed", "button_9slice", "button_pressed_9slice", "checkbox", "log_9slice", "panel_9slice",
+    "off", "scrollbar_3slice", "scrollbar_knob", "share_icon", "slider", "slider_knob", "textfield_9slice",
+    "dropdown_button", "external",
 )
 
 tasks.register<Copy>("syncWebAssets") {

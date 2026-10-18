@@ -11,13 +11,13 @@ import androidx.activity.viewModels
 import net.frcp.app.ui.AppScreen
 
 class MainActivity : ComponentActivity() {
-    private val vm: PickerViewModel by viewModels()
+    private val vm: PickerViewModel by viewModels { PickerViewModel.Factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The parchment runs under the status and navigation bars, whose icons stay dark on it.
+        // The page runs under the status bar, whose icons are dark on it. The navigation bar's are set by AppScreen.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) vm.onLaunch(intent?.dataString)

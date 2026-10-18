@@ -14,12 +14,22 @@ enum class UiSound(val file: String) {
     Mute("mute"),
 }
 
+/** Plays the jingles and UI sounds, by their paths in the assets. */
+interface SoundPlayer {
+    /** Starts loading the sound at [path], so it plays without delay later. */
+    fun load(path: String)
+
+    fun play(path: String)
+
+    fun release()
+}
+
 /**
  * Plays the jingles and UI sounds from the assets, one at a time as on the desktop app: a new sound cuts off the one
  * playing. Each sound gets a player that stays prepared, so that a sound loaded ahead, such as the next draw's jingle,
  * starts at once. The players of the least recently used sounds are let go.
  */
-class Sounds(private val assets: AssetManager) {
+class Sounds(private val assets: AssetManager) : SoundPlayer {
     private class Clip(val player: MediaPlayer) {
         var prepared = false
         var startWhenPrepared = false
@@ -28,12 +38,11 @@ class Sounds(private val assets: AssetManager) {
     private val clips = LinkedHashMap<String, Clip>(16, 0.75f, true)
     private var playing: Clip? = null
 
-    /** Starts loading the sound at [path], so it plays without delay later. */
-    fun load(path: String) {
+    override fun load(path: String) {
         clip(path)
     }
 
-    fun play(path: String) {
+    override fun play(path: String) {
         stop()
         val c = clip(path) ?: return
         playing = c
@@ -55,7 +64,7 @@ class Sounds(private val assets: AssetManager) {
         c.player.seekTo(0)
     }
 
-    fun release() {
+    override fun release() {
         playing = null
         for (c in clips.values) c.player.release()
         clips.clear()

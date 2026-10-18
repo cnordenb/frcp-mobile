@@ -1,19 +1,19 @@
 package net.frcp.app
 
-import android.app.Application
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import net.frcp.app.logic.Draw
 import net.frcp.app.logic.GameData
 import net.frcp.app.logic.Logic
@@ -22,25 +22,27 @@ import net.frcp.app.logic.Picker
 import net.frcp.app.logic.PickerState
 import net.frcp.app.logic.SharedLink
 import net.frcp.app.ui.Images
-import java.io.ByteArrayOutputStream
+import net.frcp.app.ui.Page
 import java.time.LocalDateTime
 import java.util.Locale
 
 /**
  * The picker on top of the rules in [Logic]: the saved state and settings, undo and redo, sound, share links and
  * presets, as the web version's script.js runs them. The screen reads [view], [settings], [tab], [dialog] and [toast],
- * and calls the actions.
+ * and calls the actions. What it needs from the phone comes in through [store], [sounds] and [files], which [Factory]
+ * makes and the tests stand in for; a missing random source, [rng] null, leaves nothing to draw.
  */
-class PickerViewModel(app: Application) : AndroidViewModel(app) {
-    val logic = Logic(GameData.parse(app.assets.open(Assets.DATA).bufferedReader().use { it.readText() }))
-    val images = Images(app.assets)
-
+class PickerViewModel(
+    val logic: Logic,
+    val images: Images,
+    private val store: Store,
+    private val sounds: SoundPlayer,
+    private val files: PresetFiles,
+    private val rng: MersenneTwister? = runCatching { MersenneTwister() }.getOrNull(),
+) : ViewModel() {
     /** The icon cell that stands for random: after every civ's, as in the web version's civ atlas. */
     val randomCell = logic.civs.size
 
-    private val store = Store(app)
-    private val sounds = Sounds(app.assets)
-    private val rng = runCatching { MersenneTwister() }.getOrNull()
     private val picker = Picker(rng)
     private var state = logic.parseState(store.state) ?: logic.emptyState()
     private val undoStack = ArrayDeque<PickerState>()
@@ -67,8 +69,13 @@ class PickerViewModel(app: Application) : AndroidViewModel(app) {
     init {
         for (s in UiSound.entries) sounds.load(Assets.uiSound(s.file))
         loadAhead()
-        // The civ icons decode away from the screen's thread, ready for the logs and the Pool tab.
+    }
+
+    /** The page art, which the first frame shows, and then the civ icons decode away from the screen's thread. */
+    private fun decodeAhead() {
         viewModelScope.launch(Dispatchers.Default) {
+            images[Assets.page("background")]
+            for (tab in 0..2) images[Page.strip(tab)]
             for (c in logic.civs) images[Assets.civIcon(c.file)]
         }
     }
@@ -504,15 +511,8 @@ class PickerViewModel(app: Application) : AndroidViewModel(app) {
     fun writePreset(uri: Uri?) {
         uri ?: return
         val text = logic.presetText(state, settings.fresh)
-        val resolver = getApplication<Application>().contentResolver
         viewModelScope.launch {
-            val saved = withContext(Dispatchers.IO) {
-                runCatching {
-                    val out = runCatching { resolver.openOutputStream(uri, "wt") }.getOrNull() ?: resolver.openOutputStream(uri, "w")
-                    checkNotNull(out).use { it.write(text.toByteArray()) }
-                }.isSuccess
-            }
-            if (saved) {
+            if (files.write(uri, text)) {
                 showToast("Preset saved")
             } else {
                 sfx(UiSound.Error)
@@ -529,41 +529,25 @@ class PickerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun readPreset(uri: Uri?) {
         uri ?: return
-        val resolver = getApplication<Application>().contentResolver
         viewModelScope.launch {
-            val (name, text) = withContext(Dispatchers.IO) {
-                val name = runCatching {
-                    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-                        if (c.moveToFirst()) c.getString(0) else null
-                    }
-                }.getOrNull() ?: "That file"
-                name to runCatching { resolver.openInputStream(uri)?.use { readText(it, PRESET_MAX_BYTES) } }.getOrNull()
-            }
-            val preset = text?.let(logic::parsePreset)
-            if (preset == null) {
-                sfx(UiSound.Error)
-                message("Preset not recognised", "$name isn't a Fresh Random Civ Picker preset, so nothing has changed.")
-                return@launch
-            }
-            clearHistory()
-            logic.applyPreset(state, preset)
-            commit()
-            if (settings.jingles) jingle(currentId()) else sfx(UiSound.Button)
-            showToast("Preset loaded")
+            val file = files.read(uri, PRESET_MAX_BYTES)
+            loadPresetText(file.name ?: "That file", file.text)
         }
     }
 
-    /** The text of a file up to max bytes long, or null for a longer one. */
-    private fun readText(input: java.io.InputStream, max: Int): String? {
-        val out = ByteArrayOutputStream()
-        val chunk = ByteArray(8192)
-        while (true) {
-            val n = input.read(chunk)
-            if (n < 0) break
-            out.write(chunk, 0, n)
-            if (out.size() > max) return null
+    /** Loads a preset file's [text], or says the file [name] isn't one when it isn't, or couldn't be read. */
+    internal fun loadPresetText(name: String, text: String?) {
+        val preset = text?.let(logic::parsePreset)
+        if (preset == null) {
+            sfx(UiSound.Error)
+            message("Preset not recognised", "$name isn't a Fresh Random Civ Picker preset, so nothing has changed.")
+            return
         }
-        return out.toByteArray().toString(Charsets.UTF_8)
+        clearHistory()
+        logic.applyPreset(state, preset)
+        commit()
+        if (settings.jingles) jingle(currentId()) else sfx(UiSound.Button)
+        showToast("Preset loaded")
     }
 
     companion object {
@@ -572,5 +556,15 @@ class PickerViewModel(app: Application) : AndroidViewModel(app) {
         const val DONATE = "https://ko-fi.com/hjoerleif"
         private const val UNDO_CAP = 200
         private const val PRESET_MAX_BYTES = 65536
+
+        /** The view model with the app's data, its saved settings and state, its sounds and the phone's files. */
+        val Factory = viewModelFactory {
+            initializer {
+                val app = checkNotNull(this[APPLICATION_KEY])
+                val data = GameData.parse(app.assets.open(Assets.DATA).bufferedReader().use { it.readText() })
+                PickerViewModel(Logic(data), Images(app.assets::open), PrefsStore(app), Sounds(app.assets), DocumentFiles(app.contentResolver))
+                    .apply { decodeAhead() }
+            }
+        }
     }
 }

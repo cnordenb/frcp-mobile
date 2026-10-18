@@ -5,6 +5,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,11 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -31,19 +30,39 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import net.frcp.app.Assets
 import net.frcp.app.PickerViewModel
 import net.frcp.app.logic.Civ
+import net.frcp.app.logic.Edition
+import net.frcp.app.logic.Logic
+
+/** The DLC toggles left out to make room for the civs, which never scroll. Their civs still toggle one by one. */
+internal val HIDDEN_DLC_TOGGLES = setOf("west", "dukes", "india")
+
+/** A row of civs at full size, as frcp.net's phone layout has them. */
+private val CIV_ROW = 24.dp
+
+/** The DLC toggles the Pool tab shows for an edition, top to bottom. */
+internal fun shownDlcToggles(edition: Edition) = edition.dlcToggles.filter { it !in HIDDEN_DLC_TOGGLES }
+
+/**
+ * The Pool tab's civs in rows of three: every civ in its place in the alphabetical order of them all, and null in the
+ * places of the civs newer than the edition [ed], so no civ moves when the edition changes.
+ */
+internal fun civGrid(logic: Logic, ed: String): List<List<Civ?>> =
+    logic.displayOrder.map { if (logic.inEdition(it, ed)) it else null }.chunked(3)
 
 /**
  * The Pool tab: the editions beside the edition's banner, Auto-toggle beside the count, the edition's DLC toggles in
- * two columns, then the civs in three columns, which scroll when the screen is too short for them, and the buttons
- * at the bottom. frcp.net's phone layout leaves out the toggles of the Definitive Edition's four oldest DLCs to fit
- * the civs without scrolling; the app keeps them all.
+ * two columns but for [HIDDEN_DLC_TOGGLES], then the civs in three columns, and the buttons at the bottom. Every civ
+ * keeps its place in the alphabetical order of them all, so the civs of newer editions leave theirs empty. The civs
+ * never scroll: when the screen is too short for their rows at full size, the rows shrink, icons and names with them.
  */
 @Composable
-fun PoolTab(vm: PickerViewModel, topInset: Dp) {
+fun PoolTab(vm: PickerViewModel, pageTop: Dp) {
     val logic = vm.logic
     val view = vm.view
     val settings = vm.settings
@@ -52,10 +71,11 @@ fun PoolTab(vm: PickerViewModel, topInset: Dp) {
     val images = LocalImages.current
     val dlcAtlas = images[Assets.DLC_ATLAS]
     val dlcIcons = remember(logic) { logic.dlcs.values.filter { it.hasIcon }.map { it.key } }
+    val civRows = remember(logic, ed) { civGrid(logic, ed) }
     fun isOn(id: Int) = id !in view.state.off
 
     Column(
-        Modifier.fillMaxSize().padding(top = 58.dp + topInset, start = 14.dp, end = 14.dp, bottom = 10.dp),
+        Modifier.fillMaxSize().padding(top = 58.dp + pageTop, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row {
@@ -80,7 +100,7 @@ fun PoolTab(vm: PickerViewModel, topInset: Dp) {
             Label("Enabled: ${view.pool.size}/${view.editionTotal}", bold = true)
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            for (pair in info.dlcToggles.chunked(2)) {
+            for (pair in shownDlcToggles(info).chunked(2)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     for (dlc in pair) {
                         val on = logic.civs.any { it.dlc == dlc && logic.inEdition(it, ed) && isOn(it.id) }
@@ -92,12 +112,20 @@ fun PoolTab(vm: PickerViewModel, topInset: Dp) {
                 }
             }
         }
-        // Each civ keeps the alphabetical order, and the civs of newer editions are left out.
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-            for (row in logic.displayOrder.filter { logic.inEdition(it, ed) }.chunked(3)) {
-                Row(Modifier.height(24.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (c in row) CivToggle(c, isOn(c.id), images[Assets.civIcon(c.file)], { vm.toggleCiv(c.id) }, Modifier.weight(1f).fillMaxHeight())
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val scale = minOf(1f, maxHeight / (CIV_ROW * civRows.size))
+            Column {
+                for (row in civRows) {
+                    Row(Modifier.height(CIV_ROW * scale), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (c in row) {
+                            if (c != null) {
+                                CivToggle(c, isOn(c.id), images[Assets.civIcon(c.file)], scale, { vm.toggleCiv(c.id) }, Modifier.weight(1f).fillMaxHeight())
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }
@@ -133,19 +161,28 @@ private fun EditionRow(index: Int, text: String, selected: Boolean, onClick: () 
     }
 }
 
+/** A civ's toggle, its icon and name at [scale] times their full size. */
 @Composable
-private fun CivToggle(c: Civ, on: Boolean, icon: ImageBitmap, onToggle: () -> Unit, modifier: Modifier) =
-    Toggle(c.name, on, onToggle, modifier, 2.dp) { ToggleIcon(icon, on, 18.dp) }
+private fun CivToggle(c: Civ, on: Boolean, icon: ImageBitmap, scale: Float, onToggle: () -> Unit, modifier: Modifier) =
+    Toggle(c.name, on, onToggle, modifier, 2.dp, 13.sp * scale) { ToggleIcon(icon, on, 18.dp * scale) }
 
 /** A civ or DLC toggle: its icon stands in for the checkbox, and its name is bold while on and struck through while off. */
 @Composable
-private fun Toggle(name: String, on: Boolean, onToggle: () -> Unit, modifier: Modifier, gap: Dp, icon: @Composable () -> Unit) {
+private fun Toggle(
+    name: String,
+    on: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier,
+    gap: Dp,
+    size: TextUnit = 13.sp,
+    icon: @Composable () -> Unit,
+) {
     Row(
         modifier.toggleable(on, null, null, role = Role.Checkbox) { onToggle() },
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon()
-        Label(name, bold = on, italic = !on, strike = !on, oneLine = true)
+        Label(name, size = size, bold = on, italic = !on, strike = !on, oneLine = true)
     }
 }

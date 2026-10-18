@@ -87,7 +87,7 @@ fun ParchmentDialog(
 ) {
     WindowDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         // The dialog covers the screen and draws frcp.net's light backdrop itself: under the system's dimming, Android
-        // turns the status bar's icons white, which hides them on the parchment.
+        // turns the system bars' icons white, which hides them on the backdrop.
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         LaunchedEffect(window) {
             window ?: return@LaunchedEffect

@@ -52,8 +52,20 @@ import kotlin.math.roundToInt
 
 // The slider image has the off track above the on track, each 340×25 px. The knob travels along the track's groove,
 // which runs from 32 to 308 px of the 340, between the arrowheads.
-private const val GROOVE_START = 32f / 340f
-private const val GROOVE_LENGTH = 276f / 340f
+internal const val GROOVE_START = 32f / 340f
+internal const val GROOVE_LENGTH = 276f / 340f
+
+/** Where the knob's centre sits for [value], as a share of the slider's width: [min] at the groove's start, [max] at its end. */
+internal fun sliderKnobAt(value: Int, min: Int, max: Int): Float {
+    val fill = if (max > min) (value - min).toFloat() / (max - min) else 0f
+    return GROOVE_START + GROOVE_LENGTH * fill
+}
+
+/** The value under a finger [x] px along a slider [width] px wide: the nearest, and [min] or [max] past the groove's ends. */
+internal fun sliderValueAt(x: Float, width: Float, min: Int, max: Int): Int {
+    val p = ((x - width * GROOVE_START) / (width * GROOVE_LENGTH)).coerceIn(0f, 1f)
+    return (min + p * (max - min)).roundToInt()
+}
 
 /**
  * The parchment slider: the off track, with the on track over it up to the knob, and the knob image as the thumb.
@@ -66,11 +78,7 @@ fun ParchmentSlider(value: Int, min: Int, max: Int, enabled: Boolean, onChange: 
     val knob = images[Assets.ui("slider_knob")]
     val change by rememberUpdatedState(onChange)
     val settled by rememberUpdatedState(onSettled)
-    val fill = if (max > min) (value - min).toFloat() / (max - min) else 0f
-    fun valueAt(x: Float, width: Float): Int {
-        val p = ((x - width * GROOVE_START) / (width * GROOVE_LENGTH)).coerceIn(0f, 1f)
-        return (min + p * (max - min)).roundToInt()
-    }
+    val knobAt = sliderKnobAt(value, min, max)
     Box(
         Modifier
             .fillMaxWidth()
@@ -91,10 +99,10 @@ fun ParchmentSlider(value: Int, min: Int, max: Int, enabled: Boolean, onChange: 
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     down.consume()
-                    change(valueAt(down.position.x, size.width.toFloat()))
+                    change(sliderValueAt(down.position.x, size.width.toFloat(), min, max))
                     drag(down.id) {
                         it.consume()
-                        change(valueAt(it.position.x, size.width.toFloat()))
+                        change(sliderValueAt(it.position.x, size.width.toFloat(), min, max))
                     }
                     settled()
                 }
@@ -105,7 +113,7 @@ fun ParchmentSlider(value: Int, min: Int, max: Int, enabled: Boolean, onChange: 
                 val at = IntOffset(0, ((size.height - h) / 2).roundToInt())
                 val dst = IntSize(w.roundToInt(), h.roundToInt())
                 drawPart(track, 0, 0, 340, 25, at, dst)
-                val end = w * (GROOVE_START + GROOVE_LENGTH * fill)
+                val end = w * knobAt
                 clipRect(right = end) { drawPart(track, 0, 25, 340, 25, at, dst) }
                 val k = 24.dp.toPx()
                 drawPart(

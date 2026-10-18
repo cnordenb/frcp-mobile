@@ -23,6 +23,9 @@ object Assets {
     const val RANDOM = "random"
 
     fun ui(name: String) = "images/ui/$name.webp"
+
+    /** The app's own page art: the parchment and its three tab strips, PNGs that meet seamlessly. */
+    fun page(name: String) = "images/ui/$name.png"
     fun jingle(file: String, legacy: Boolean) = if (legacy) "sounds/civ/legacy/$file.webm" else "sounds/civ/$file.webm"
     fun uiSound(name: String) = "sounds/ui/$name.webm"
 }

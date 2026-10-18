@@ -1,6 +1,5 @@
 package net.frcp.app.ui
 
-import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
@@ -22,20 +21,21 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * The images from the assets, each decoded once, on first use or ahead of it from another thread. They have mipmaps,
- * so the civ icons stay smooth at the small sizes of the logs and the Pool tab.
+ * The images from the assets, which [open] opens by their paths, each decoded once, on first use or ahead of it from
+ * another thread. They have mipmaps, so the civ icons stay smooth at the small sizes of the logs and the Pool tab.
  */
-class Images(private val assets: AssetManager) {
+class Images(private val open: (String) -> InputStream) {
     private val bitmaps = ConcurrentHashMap<String, ImageBitmap>()
     private val slices = HashMap<String, NineSlice>()
 
     operator fun get(path: String): ImageBitmap = bitmaps.computeIfAbsent(path) {
-        assets.open(path).use { BitmapFactory.decodeStream(it) }.apply { setHasMipMap(true) }.asImageBitmap()
+        open(path).use { BitmapFactory.decodeStream(it) }.apply { setHasMipMap(true) }.asImageBitmap()
     }
 
     fun nineSlice(path: String, slice: Int): NineSlice = slices.getOrPut(path) { NineSlice(get(path).asAndroidBitmap(), slice) }
@@ -89,8 +89,8 @@ class NineSlice(image: Bitmap, slice: Int) {
                 continue
             }
             // An edge tiles along its length and stretches across the frame. The middle tiles both ways.
-            val tileW = if (c == 1) tile(rect.width(), piece.width * scale, edges) else rect.width()
-            val tileH = if (r == 1) tile(rect.height(), piece.height * scale, edges) else rect.height()
+            val tileW = if (c == 1) tileLength(rect.width(), piece.width * scale, edges) else rect.width()
+            val tileH = if (r == 1) tileLength(rect.height(), piece.height * scale, edges) else rect.height()
             matrix.setScale(tileW / piece.width, tileH / piece.height)
             matrix.postTranslate(rect.left, rect.top)
             shaders[i].setLocalMatrix(matrix)
@@ -105,10 +105,14 @@ class NineSlice(image: Bitmap, slice: Int) {
         rect.set(inset, inset, width - inset, height - inset)
         canvas.drawBitmap(pieces[4], null, rect, paint)
     }
-
-    private fun tile(length: Float, size: Float, edges: Tile) =
-        if (edges == Tile.Round) length / max(1, (length / size).roundToInt()) else size
 }
+
+/**
+ * How long a tile of [size] px runs along a nine-slice edge [length] px long: its own size when tiled, and when
+ * rounded, the length split into the whole number of tiles nearest to fitting, at least one.
+ */
+internal fun tileLength(length: Float, size: Float, edges: Tile) =
+    if (edges == Tile.Round) length / max(1, (length / size).roundToInt()) else size
 
 fun Modifier.nineSlice(slices: NineSlice, border: Dp, edges: Tile = Tile.Repeat, fill: Boolean = true) = drawBehind {
     val b = max(1, border.toPx().roundToInt()).toFloat()

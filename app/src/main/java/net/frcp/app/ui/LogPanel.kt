@@ -96,6 +96,24 @@ fun LogPanel(rounds: List<List<LogRow>>, description: String, modifier: Modifier
 private val ROW_HEIGHT = 20.dp
 
 /**
+ * The scrollbar knob's top, on a track that leaves it [free] px to move in: at the top before the log has [scrolled],
+ * at the bottom once it's [atEnd], and in between in proportion to how much of its [range] it has scrolled.
+ */
+internal fun scrollKnobTop(scrolled: Float, range: Float, atEnd: Boolean, free: Float): Float {
+    val p = if (atEnd) 1f else if (range <= 0f) 0f else min(1f, scrolled / range)
+    return p * free
+}
+
+/**
+ * How far the log has scrolled with the knob dragged [dy] px from where it was at [scrolled0]: the track's free
+ * length stands for the log's whole [range].
+ */
+internal fun scrollForKnobDrag(scrolled0: Float, dy: Float, range: Float, free: Float) = scrolled0 + dy * range / max(1f, free)
+
+/** How far a press on the track pages a log of [viewport] px: a line short of a page, and at least a [line]. */
+internal fun scrollPage(viewport: Float, line: Float) = max(line, viewport - line)
+
+/**
  * The game's scrollbar: an up button, a track and a down button, with a knob that runs the whole track. The buttons
  * scroll a line at a time while held, a press on the track pages towards it until the knob gets there, and the knob
  * drags the log along in proportion. The scrollbar image has the up button, the track and the down button from top to
@@ -113,11 +131,8 @@ private fun LogScrollBar(list: LazyListState, modifier: Modifier) {
     // Every line of a log is a row high, so how far the log has scrolled, and how far it can, follow from its lines.
     fun scrolled() = list.firstVisibleItemIndex * line + list.firstVisibleItemScrollOffset
     fun range() = list.layoutInfo.let { it.totalItemsCount * line + it.beforeContentPadding + it.afterContentPadding - it.viewportSize.height }
-    fun knobTop(): Float {
-        val p = if (!list.canScrollForward) 1f else if (range() <= 0f) 0f else min(1f, scrolled() / range())
-        return p * (trackHeight - knobSize)
-    }
-    fun page() = max(line, list.layoutInfo.viewportSize.height - line)
+    fun knobTop() = scrollKnobTop(scrolled(), range(), !list.canScrollForward, trackHeight - knobSize)
+    fun page() = scrollPage(list.layoutInfo.viewportSize.height.toFloat(), line)
 
     Box(modifier) {
         Box(
@@ -141,13 +156,13 @@ private fun LogScrollBar(list: LazyListState, modifier: Modifier) {
                             down.consume()
                             val top = knobTop()
                             if (down.position.y in top..top + knobSize) {
-                                // Dragging the knob scrolls in proportion, the track's free length standing for the hidden part of the log.
                                 val y0 = down.position.y
                                 val scrolled0 = scrolled()
-                                val ratio = range() / max(1f, trackHeight - knobSize)
+                                val range0 = range()
+                                val free = trackHeight - knobSize
                                 drag(down.id) {
                                     it.consume()
-                                    list.dispatchRawDelta(scrolled0 + (it.position.y - y0) * ratio - scrolled())
+                                    list.dispatchRawDelta(scrollForKnobDrag(scrolled0, it.position.y - y0, range0, free) - scrolled())
                                 }
                             } else {
                                 val dir = if (down.position.y < top) -1 else 1

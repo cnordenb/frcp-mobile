@@ -1,8 +1,10 @@
 package net.frcp.app.logic
 
+import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import javax.imageio.ImageIO
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -49,6 +51,9 @@ fun chiSquareLimit(df: Int): Double {
     val z = 3.09
     return df * (1 - 2.0 / (9 * df) + z * sqrt(2.0 / (9 * df))).pow(3)
 }
+
+/** A PNG file's pixels. */
+fun image(rel: String): BufferedImage = checkNotNull(ImageIO.read(File(ASSETS, rel))) { "$rel isn't an image" }
 
 /** Width and height from a PNG file's header. */
 fun pngSize(rel: String): Pair<Int, Int> {
