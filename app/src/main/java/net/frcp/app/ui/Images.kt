@@ -26,10 +26,6 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/**
- * The images from the assets, which [open] opens by their paths, each decoded once, on first use or ahead of it from
- * another thread. They have mipmaps, so the civ icons stay smooth at the small sizes of the logs and the Pool tab.
- */
 class Images(private val open: (String) -> InputStream) {
     private val bitmaps = ConcurrentHashMap<String, ImageBitmap>()
     private val slices = HashMap<String, NineSlice>()
@@ -38,18 +34,14 @@ class Images(private val open: (String) -> InputStream) {
         open(path).use { BitmapFactory.decodeStream(it) }.apply { setHasMipMap(true) }.asImageBitmap()
     }
 
-    fun nineSlice(path: String, slice: Int): NineSlice = slices.getOrPut(path) { NineSlice(get(path).asAndroidBitmap(), slice) }
+    fun nineSlice(path: String, slice: Int): NineSlice =
+        slices.getOrPut(path) { NineSlice(get(path).asAndroidBitmap(), slice) }
 }
 
 val LocalImages = staticCompositionLocalOf<Images> { error("No images provided") }
 
-/** How a nine-slice's edges fill their length, as CSS border-image-repeat: stretched, tiled, or tiled a whole number of times. */
 enum class Tile { Stretch, Repeat, Round }
 
-/**
- * An image cut 3×3 as CSS border-image cuts it: corners [slice] px square, the edges between them and the middle. It
- * draws the web version's wooden buttons, sunken logs, text fields and dialog panels at any size.
- */
 class NineSlice(image: Bitmap, slice: Int) {
     private val slice = slice.toFloat()
     private val pieces: List<Bitmap>
@@ -69,10 +61,6 @@ class NineSlice(image: Bitmap, slice: Int) {
         shaders = pieces.map { BitmapShader(it, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT) }
     }
 
-    /**
-     * Draws the image over a [width]×[height] box with a [border] px frame. The corners stretch to the frame's size, the
-     * edges run along it as [edges] says, and the middle, when [fill] is set, fills the rest as the edges do.
-     */
     fun draw(canvas: Canvas, width: Float, height: Float, border: Float, edges: Tile, fill: Boolean) {
         val xs = floatArrayOf(0f, border, width - border, width)
         val ys = floatArrayOf(0f, border, height - border, height)
@@ -88,7 +76,6 @@ class NineSlice(image: Bitmap, slice: Int) {
                 canvas.drawBitmap(piece, null, rect, paint)
                 continue
             }
-            // An edge tiles along its length and stretches across the frame. The middle tiles both ways.
             val tileW = if (c == 1) tileLength(rect.width(), piece.width * scale, edges) else rect.width()
             val tileH = if (r == 1) tileLength(rect.height(), piece.height * scale, edges) else rect.height()
             matrix.setScale(tileW / piece.width, tileH / piece.height)
@@ -100,17 +87,12 @@ class NineSlice(image: Bitmap, slice: Int) {
         }
     }
 
-    /** The middle stretched over the box inset by [inset] px: the dialog panel's inlay, which reaches under its frame. */
     fun drawInlay(canvas: Canvas, width: Float, height: Float, inset: Float) {
         rect.set(inset, inset, width - inset, height - inset)
         canvas.drawBitmap(pieces[4], null, rect, paint)
     }
 }
 
-/**
- * How long a tile of [size] px runs along a nine-slice edge [length] px long: its own size when tiled, and when
- * rounded, the length split into the whole number of tiles nearest to fitting, at least one.
- */
 internal fun tileLength(length: Float, size: Float, edges: Tile) =
     if (edges == Tile.Round) length / max(1, (length / size).roundToInt()) else size
 
@@ -119,7 +101,6 @@ fun Modifier.nineSlice(slices: NineSlice, border: Dp, edges: Tile = Tile.Repeat,
     drawIntoCanvas { slices.draw(it.nativeCanvas, size.width, size.height, b, edges, fill) }
 }
 
-/** Draws the [w]×[h] px part of [image] at ([x], [y]) over the whole of this drawing's size, or over [dst]. */
 fun DrawScope.drawPart(
     image: ImageBitmap, x: Int, y: Int, w: Int, h: Int,
     dstOffset: IntOffset = IntOffset.Zero,
@@ -128,7 +109,6 @@ fun DrawScope.drawPart(
     colorFilter: ColorFilter? = null,
 ) = drawImage(image, IntOffset(x, y), IntSize(w, h), dstOffset, dstSize, alpha = alpha, colorFilter = colorFilter)
 
-/** Draws cell [index] of an atlas of [cols] square cells per row over the whole of this drawing's size. */
 fun DrawScope.drawCell(atlas: ImageBitmap, index: Int, cols: Int, colorFilter: ColorFilter? = null) {
     val cell = atlas.width / cols
     drawPart(atlas, index % cols * cell, index / cols * cell, cell, cell, colorFilter = colorFilter)

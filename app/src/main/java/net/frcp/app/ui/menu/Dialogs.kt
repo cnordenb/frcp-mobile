@@ -1,4 +1,4 @@
-package net.frcp.app.ui
+package net.frcp.app.ui.menu
 
 import android.view.WindowManager
 import androidx.compose.foundation.background
@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -20,12 +20,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -48,18 +48,28 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog as WindowDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
-import net.frcp.app.Assets
 import net.frcp.app.BuildConfig
-import net.frcp.app.Dialog
-import net.frcp.app.PickerViewModel
+import net.frcp.app.device.Assets
+import net.frcp.app.logic.Civ
+import net.frcp.app.logic.Edition
+import net.frcp.app.logic.Picker
 import net.frcp.app.logic.SharedLink
+import net.frcp.app.picker.Dialog
+import net.frcp.app.picker.PickerViewModel
+import net.frcp.app.ui.Ink
+import net.frcp.app.ui.Label
+import net.frcp.app.ui.LocalImages
+import net.frcp.app.ui.NineSlice
+import net.frcp.app.ui.Paragraph
+import net.frcp.app.ui.Tile
+import net.frcp.app.ui.widgets.ParchmentButton
+import net.frcp.app.ui.widgets.ParchmentTextField
 import kotlin.math.roundToInt
-import androidx.compose.ui.window.Dialog as WindowDialog
 
-/** The dialog that's open, if any. */
 @Composable
 fun Dialogs(vm: PickerViewModel) {
     when (val d = vm.dialog) {
@@ -72,12 +82,6 @@ fun Dialogs(vm: PickerViewModel) {
     }
 }
 
-/**
- * A parchment dialog panel with its title, its content, which scrolls when the screen is too short for it, and its
- * buttons at the bottom right. The panel is drawn from the 64 px nine-slice at 38 dp: its middle stretched into the
- * inlay, which reaches half a slice under the frame, and its corners and edges around it, the edges tiled a whole
- * number of times. Back, or a tap beside the panel, closes it as its Cancel or OK button does.
- */
 @Composable
 fun ParchmentDialog(
     title: String,
@@ -85,15 +89,13 @@ fun ParchmentDialog(
     buttons: @Composable RowScope.() -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    WindowDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        // The dialog covers the screen and draws frcp.net's light backdrop itself: under the system's dimming, Android
-        // turns the system bars' icons white, which hides them on the backdrop.
+    val wholeScreen = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    WindowDialog(onDismissRequest = onDismiss, properties = wholeScreen) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         LaunchedEffect(window) {
             window ?: return@LaunchedEffect
             window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
-            // The dialog's window takes these only once it's on screen.
             withFrameNanos { }
             WindowCompat.getInsetsController(window, window.decorView).apply {
                 isAppearanceLightStatusBars = true
@@ -116,13 +118,17 @@ fun ParchmentDialog(
 }
 
 @Composable
-private fun Panel(panel: NineSlice, title: String, buttons: @Composable RowScope.() -> Unit, content: @Composable ColumnScope.() -> Unit) {
+private fun Panel(
+    panel: NineSlice,
+    title: String,
+    buttons: @Composable RowScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         Modifier
             .padding(16.dp)
             .widthIn(max = 480.dp)
             .fillMaxWidth()
-            // A tap on the panel itself doesn't close it.
             .pointerInput(Unit) { detectTapGestures { } }
             .drawBehind {
                 val slice = 38.dp.toPx().roundToInt().toFloat()
@@ -137,7 +143,10 @@ private fun Panel(panel: NineSlice, title: String, buttons: @Composable RowScope
             Label(title, size = 16.sp, bold = true, oneLine = true)
         }
         Column(
-            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 4.dp),
+            Modifier
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
+                .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             content = content,
         )
@@ -155,8 +164,10 @@ fun DialogButton(text: String, onClick: () -> Unit) = ParchmentButton(text, onCl
 @Composable
 private fun Text(text: String, color: Color = Ink.Text, size: Int = 14) = Label(text, size = size.sp, color = color)
 
-private fun AnnotatedString.Builder.link(text: String, url: String) =
-    withLink(LinkAnnotation.Url(url, TextLinkStyles(SpanStyle(color = Ink.Link, textDecoration = TextDecoration.Underline)))) { append(text) }
+private fun AnnotatedString.Builder.link(text: String, url: String) {
+    val style = TextLinkStyles(SpanStyle(color = Ink.Link, textDecoration = TextDecoration.Underline))
+    withLink(LinkAnnotation.Url(url, style)) { append(text) }
+}
 
 @Composable
 private fun AboutDialog(vm: PickerViewModel) {
@@ -178,12 +189,17 @@ private fun AboutDialog(vm: PickerViewModel) {
                 append(".")
             },
         )
-        Text("Custom civ pool, draw log and user settings are saved on this device only. Share links carry a copy of the custom civ pool, and optionally of this round's draws.")
+        Text(
+            "Custom civ pool, draw log and user settings are saved on this device only. " +
+                "Share links carry a copy of the custom civ pool, and optionally of this round's draws.",
+        )
         Paragraph(
             buildAnnotatedString {
-                append("Age of Empires II © Microsoft Corporation. Fresh Random Civ Picker was created under Microsoft's \"")
+                append("Age of Empires II © Microsoft Corporation. ")
+                append("Fresh Random Civ Picker was created under Microsoft's \"")
                 link("Game Content Usage Rules", "https://www.xbox.com/en-US/developers/rules")
-                append("\" using assets from Age of Empires II and Age of Empires II: Definitive Edition, and it is not endorsed by or affiliated with Microsoft.")
+                append("\" using assets from Age of Empires II and Age of Empires II: Definitive Edition, ")
+                append("and it is not endorsed by or affiliated with Microsoft.")
             },
             size = 12.sp, color = Ink.Brown,
         )
@@ -217,13 +233,13 @@ private fun OpenLinkDialog(vm: PickerViewModel) {
     }
 }
 
-/** What a share link holds, before it replaces the current civ pool and round. */
 @Composable
 private fun PreviewDialog(vm: PickerViewModel, link: SharedLink) {
     val logic = vm.logic
     val enabled = link.enabled.count { it }
     val out = logic.displayOrder.filter { logic.inEdition(it, link.edition) && !link.enabled[it.id] }.map { it.name }
-    val pool = "$enabled of ${logic.editionTotal(link.edition)} civs" + if (out.isNotEmpty() && out.size <= 12) ". Left out: ${out.joinToString(", ")}" else ""
+    val leftOut = if (out.isNotEmpty() && out.size <= 12) ". Left out: ${out.joinToString(", ")}" else ""
+    val pool = "$enabled of ${logic.editionTotal(link.edition)} civs" + leftOut
     val round = if (link.draws.isEmpty()) "Nothing drawn. Loading the link starts a new round."
     else "${link.draws.size} drawn: ${link.draws.joinToString(", ") { logic.civs[it].name }}"
     ParchmentDialog("Open Shared Link", vm::closeDialog, {
@@ -231,7 +247,8 @@ private fun PreviewDialog(vm: PickerViewModel, link: SharedLink) {
         DialogButton("Cancel", vm::closeDialog)
     }) {
         Text("This link holds:")
-        for ((term, value) in listOf("Edition" to logic.editionInfo.getValue(link.edition).name, "Civ pool" to pool, "This round" to round)) {
+        val edition = logic.editionInfo.getValue(link.edition).name
+        for ((term, value) in listOf("Edition" to edition, "Civ pool" to pool, "This round" to round)) {
             Row {
                 Label(term, Modifier.width(84.dp), size = 14.sp, color = Ink.Brown)
                 Label(value, Modifier.weight(1f), size = 14.sp)

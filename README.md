@@ -1,50 +1,44 @@
+[![GitHub last commit](https://img.shields.io/github/last-commit/cnordenb/frcp-mobile)](#)
+[![language](https://img.shields.io/badge/language-Kotlin-FFFF00)](#)
+[![license](https://img.shields.io/badge/license-MIT-007FFF)](LICENSE)
+[![testing](https://img.shields.io/badge/testing-yes-C3FF00)](documentation/TESTS.md)
+[![maintainable](https://img.shields.io/badge/maintainable-yes-00FF72)](documentation/MAINTAINER.md)
+
 # Fresh Random Civ Picker for Android
 
+## Description
+
 The app version of [frcp.net](https://frcp.net/): it draws a fresh random civilisation for Age of Empires II, and every enabled civ comes up once before any civ repeats. Written in Kotlin with Jetpack Compose, it follows frcp.net's phone layout and its parchment look.
+
+## Usage
 
 - **Draw tab:** swipe left to draw, right to undraw, up to redraw and down to reset. Tap the civ icon to hear its jingle.
 - **Log tab:** the drawn civs, newest first and round by round, and the civs left this round.
 - **Pool tab:** the edition, the DLC toggles and the civ pool.
 - **Menu:** open a share link, save and load presets, the tech tree, options and about.
 
-## Shared with the web version
+The app reads and writes the same as the web version and the desktop app:
 
-The rules in `app/src/main/java/net/frcp/app/logic/` are a port of the web version's `logic.js`, rule for rule, so the app and frcp.net read and write the same:
-
-- **Share links** (`https://frcp.net/#p=…`). The share buttons hand them to Android's share sheet. Links open in the app from the menu's Open Link, or straight from another app once Android sends frcp.net links here (see below).
+- **Share links** (`https://frcp.net/#p=…`). The share buttons hand them to Android's share sheet. Links open in the app from the menu's Open Link, or straight from another app once Android sends frcp.net links here.
 - **Presets:** the desktop app's `.txt` files.
-- **Saved state and settings:** the same JSON as the browser keeps.
 
-The app's `data.json`, images and sounds are copies of the web version's, except the civ icons: the app has its own lossless PNGs in `app/src/main/assets/images/civ/`, so a new civ needs its PNG added there by hand. After the shared files change in [frcp_html](https://github.com/cnordenb/frcp_html), copy them over from a checkout beside this one:
+Android sends `https://frcp.net/` links to the app by default only once frcp.net vouches for the app. Until then, turn it on under the app's settings, in Open by default.
 
-```
-./gradlew syncWebAssets syncWebTestFixtures
-```
+To build the app yourself, see [MAINTAINER.md](documentation/MAINTAINER.md#building-the-app).
 
-Pass `-PfrcpWebDir=<path>` for a checkout somewhere else. Run these on their own rather than in the same Gradle call as a build.
+## Contributing
 
-## Building
+Anyone is welcome to open an [issue](https://github.com/cnordenb/frcp-mobile/issues) to submit a bug report or suggest a new feature. Alternatively, you may fork or copy the repository and take it in any direction you wish.
 
-Open the folder in Android Studio, or build from the command line with JDK 17 or newer:
+If you wish to contribute work into this repository, please consult [CONTRIBUTING.md](.github/CONTRIBUTING.md) before any commits or pull requests.
 
-```
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest    # the unit tests, below
-```
+## Maintaining
 
-The build needs Android SDK platform 37.2, which Android Studio installs. `gradle.properties` sets `android.overridePathCheck=true`, as the Android Gradle plugin otherwise refuses a project path with non-ASCII characters, such as one under `C:\Users\Hjörleif`.
+To keep Fresh Random Civ Picker for Android working and up to date, see [MAINTAINER.md](documentation/MAINTAINER.md).
 
-## Tests
+## Acknowledgements
 
-The unit tests in `app/src/test/` run on the JVM, without a phone or an emulator:
-
-- **`logic/`** ports the web version's `tests/` one for one, against the same fixtures: civ data and its icons, atlases and jingles, saved state, drawing and continuous freshness, share links and preset files.
-- **The view model**, as the desktop app's model tests have it: draws, undo and redo, re-rolls and resets, the civ each swipe shows coming in, the pool's editions and DLC toggles, auto-reset and auto-toggle, share links and presets in and out, settings in the web version's format, and the sounds each action plays. Stand-ins for the phone's storage, sounds and files (`TestPicker.kt`) keep what the view model saved and played.
-- **`ui/`**, as the desktop app's `ParchmentGeometryTest`: the swipes' directions and how the icons follow the finger, the slider, the logs' scrollbar and nine-slice tiles, the Pool tab's fixed civ grid and DLC toggles, text contrast (WCAG 1.4.3), and the page art against the places `Page` measures on it, so new art that doesn't fit fails a test.
-
-## Opening frcp.net links in the app
-
-The manifest asks Android to send `https://frcp.net/` links to the app. Android only does so by default once frcp.net vouches for the app, with a `/.well-known/assetlinks.json` that names the app's ID (`net.frcp.app`) and the SHA-256 fingerprint of its signing certificate. Until then, a user can turn it on under the app's settings, in Open by default.
+Development of Fresh Random Civ Picker for Android was accelerated with Claude Fable 5.2.
 
 ## Microsoft assets
 

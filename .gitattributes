@@ -1,3 +1,5 @@
+* text=auto
+*.sh text eol=lf
 # Preset fixtures are compared byte for byte, so they keep the desktop app's CRLF line ends in every checkout.
 app/src/test/resources/fixtures/presets/*.txt -text
 # The Gradle wrapper scripts run on their own platforms.

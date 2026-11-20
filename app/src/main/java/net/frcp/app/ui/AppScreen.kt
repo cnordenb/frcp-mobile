@@ -58,22 +58,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
-import net.frcp.app.Effect
-import net.frcp.app.PickerViewModel
-import net.frcp.app.Toast
+import net.frcp.app.picker.Effect
+import net.frcp.app.picker.PickerViewModel
+import net.frcp.app.picker.Toast
+import net.frcp.app.ui.menu.Dialogs
+import net.frcp.app.ui.menu.MainMenu
+import net.frcp.app.ui.tabs.DrawTab
+import net.frcp.app.ui.tabs.LogTab
+import net.frcp.app.ui.tabs.PoolTab
 
-/** Whether the press now going on closed the menu, which keeps it from also swiping on the Draw tab. */
 private class MenuPress {
     var closedMenu = false
 }
 
-/**
- * The whole screen, as frcp.net's phone layout: the parchment page with its tabs along the bottom, and a hamburger
- * menu at the top right that stands in for the menu bar. The page fills the screen, under the status bar and a
- * gesture bar, whose icons are dark on it. A navigation bar of buttons takes taps, so the page stops above it, and
- * its buttons are light on the black under it. The tabs' content keeps within the page's burnt border and clear of the
- * status bar. Status messages show just over the tabs.
- */
 @Composable
 fun AppScreen(vm: PickerViewModel) {
     CompositionLocalProvider(LocalImages provides vm.images, LocalOverscrollFactory provides null) {
@@ -91,7 +88,6 @@ fun AppScreen(vm: PickerViewModel) {
             Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                // A press outside the open menu closes it, and still reaches what it lands on.
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -100,11 +96,13 @@ fun AppScreen(vm: PickerViewModel) {
                     }
                 },
         ) {
-            BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.tappableElement.only(WindowInsetsSides.Bottom))) {
+            val aboveNavBar = WindowInsets.tappableElement.only(WindowInsetsSides.Bottom)
+            BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(aboveNavBar)) {
                 val page = Page(maxWidth, maxHeight)
                 val top = max(page.top, statusBar)
                 Box(Modifier.fillMaxSize().pageArt(vm.images, vm.tab))
-                Tabs(vm, top, Modifier.fillMaxSize().padding(start = page.left, end = page.right, bottom = page.bottom)) {
+                val withinBorder = Modifier.padding(start = page.left, end = page.right, bottom = page.bottom)
+                Tabs(vm, top, Modifier.fillMaxSize().then(withinBorder)) {
                     !press.closedMenu && !vm.menuOpen
                 }
                 page.TabBar(vm)
@@ -123,16 +121,10 @@ fun AppScreen(vm: PickerViewModel) {
     }
 }
 
-/**
- * The three tabs. They all stay built, as the web page's do, so switching tabs only shows another one: the tab on
- * show is placed, and the others are laid out but left unplaced, so they neither draw nor take touches. The two not
- * on show at the start are built once the first frame is up, so they don't hold up the app's opening.
- */
 @Composable
 private fun Tabs(vm: PickerViewModel, pageTop: Dp, modifier: Modifier, swipeAllowed: () -> Boolean) {
     var built by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        // The first wait ends as the first frame starts, the second once it's drawn.
         repeat(2) { withFrameNanos { } }
         built = true
     }
@@ -159,7 +151,6 @@ private val Unplaced = Modifier.layout { measurable, constraints ->
     layout(p.width, p.height) {}
 }
 
-/** A status message, for 2.2 seconds. Its top sits 12 dp over the tabs, so it reaches over their top edge. */
 @Composable
 private fun ToastView(toast: Toast?, modifier: Modifier) {
     var shown by remember { mutableStateOf(false) }
@@ -181,7 +172,6 @@ private fun ToastView(toast: Toast?, modifier: Modifier) {
     ) { Label(toast.text, color = Color.White, oneLine = true) }
 }
 
-/** Carries out what the view model asks of the system: links, the share sheet and the file pickers. */
 @Composable
 private fun Effects(vm: PickerViewModel) {
     val context = LocalContext.current
@@ -192,9 +182,10 @@ private fun Effects(vm: PickerViewModel) {
             try {
                 when (e) {
                     is Effect.OpenUrl -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(e.url)))
-                    is Effect.Share -> context.startActivity(
-                        Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, e.text), null),
-                    )
+                    is Effect.Share -> {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, e.text)
+                        context.startActivity(Intent.createChooser(send, null))
+                    }
                     is Effect.SavePreset -> save.launch(e.fileName)
                     Effect.LoadPreset -> open.launch(arrayOf("text/plain"))
                 }

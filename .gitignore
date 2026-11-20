@@ -3,6 +3,7 @@
 .kotlin/
 /local.properties
 /.idea/
+.vscode/
 .DS_Store
 /build/
 /app/build/
@@ -11,3 +12,7 @@
 .cxx/
 *.keystore
 *.jks
+temp/
+.claude/settings.local.json
+.metrics/
+target/

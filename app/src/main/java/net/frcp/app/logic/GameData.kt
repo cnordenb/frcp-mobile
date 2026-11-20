@@ -9,11 +9,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/**
- * An edition of the game, as data.json lists it. Its DLC toggles go top to bottom on the Pool tab, with icons
- * [toggleSize] dp square and [toggleGap] dp from their names, and switching to it with auto-toggle on enables the civs
- * of its [olderDlcs]. An edition without a store [url] has a [storeNote] instead.
- */
 class Edition(
     val id: String,
     val name: String,
@@ -31,13 +26,8 @@ class Edition(
 
 class Dlc(val key: String, val name: String, val short: String, val edition: String, val hasIcon: Boolean)
 
-/** A civ as data.json lists it. [Logic] adds what follows from its DLC. */
 class CivEntry(val id: Int, val name: String, val dlc: String, val techTree: String?)
 
-/**
- * data.json, which the app shares with the web version: the editions, DLCs and civs. The editions and the DLCs keep
- * the file's order, which the share links and the icon atlases rely on.
- */
 class GameData(val editions: List<Edition>, val dlcs: Map<String, Dlc>, val civs: List<CivEntry>) {
     companion object {
         fun parse(json: String): GameData {
@@ -62,11 +52,13 @@ class GameData(val editions: List<Edition>, val dlcs: Map<String, Dlc>, val civs
             }
             val dlcs = root.getValue("dlcs").jsonObject.mapValues { (key, element) ->
                 val d = element.jsonObject
-                Dlc(key, d.string("name"), d.stringOrNull("short") ?: d.string("name"), d.string("edition"), d["icon"] != null)
+                val name = d.string("name")
+                Dlc(key, name, d.stringOrNull("short") ?: name, d.string("edition"), d["icon"] != null)
             }
             val civs = root.getValue("civs").jsonArray.map { element ->
                 val c = element.jsonObject
-                CivEntry(c.getValue("id").jsonPrimitive.int, c.string("name"), c.string("dlc"), c.stringOrNull("techTree"))
+                val id = c.getValue("id").jsonPrimitive.int
+                CivEntry(id, c.string("name"), c.string("dlc"), c.stringOrNull("techTree"))
             }
             return GameData(editions, dlcs, civs)
         }

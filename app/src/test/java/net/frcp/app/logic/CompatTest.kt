@@ -1,49 +1,86 @@
 package net.frcp.app.logic
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.FixMethodOrder
 import org.junit.Test
+import org.junit.runners.MethodSorters
 
-// Compatibility: what share links, saved data and preset files from the web version and the desktop app rely on.
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class CompatTest {
+    private val frozen = Json.parseToJsonElement(fixture("civ-ids.json")).jsonArray.map { it.jsonPrimitive.content }
+    private val links = Json.parseToJsonElement(fixture("share-links.json")).jsonArray.map { it.jsonObject }
+    private val word = Regex("\\S+")
+
+    private fun JsonObject.text(key: String) = getValue(key).jsonPrimitive.content
+    private fun JsonObject.texts(key: String) = getValue(key).jsonArray.map { it.jsonPrimitive.content }
+    private fun opened(f: JsonObject) = logic.parseShare(f.text("link"))
+
+    private fun notesWhere(differs: (JsonObject, SharedLink) -> Boolean) =
+        links.filter { f -> opened(f)?.let { differs(f, it) } == true }.map { it.text("note") }
+
     @Test
-    fun `civ IDs never change, and every civ has its ID frozen`() {
-        val frozen = Json.parseToJsonElement(fixture("civ-ids.json")).jsonArray.map { it.jsonPrimitive.content }
-        frozen.forEachIndexed { id, name ->
-            assertTrue("civ $id ($name) is gone: share links and saved data still refer to it", id < CIVS.size)
-            assertEquals("civ $id was $name: share links and saved data refer to civs by ID", name, CIVS[id].name)
-        }
-        for (c in CIVS.drop(frozen.size)) throw AssertionError("civ ${c.id} (${c.name}) isn't in the frozen civ IDs: add it in the web version")
+    fun t001_frozenCivsAreStillThere() {
+        val gone = frozen.filterIndexed { id, _ -> id >= CIVS.size }
+        assertEquals("share links and saved data still refer to these civs", emptyList<String>(), gone)
     }
 
     @Test
-    fun `share links written by earlier versions open as they did`() {
-        for (element in Json.parseToJsonElement(fixture("share-links.json")).jsonArray) {
-            val f = element.jsonObject
-            val note = f.getValue("note").jsonPrimitive.content
-            val edition = f.getValue("edition").jsonPrimitive.content
-            val opened = logic.parseShare(f.getValue("link").jsonPrimitive.content)
-            assertNotNull("$note no longer opens", opened)
-            assertEquals(note, edition, opened!!.edition)
-            val off = CIVS.filter { logic.inEdition(it, edition) && !opened.enabled[it.id] }.map { it.name }
-            assertEquals(note, f.getValue("off").jsonArray.map { it.jsonPrimitive.content }, off)
-            assertEquals(note, f.getValue("draws").jsonArray.map { idOf(it.jsonPrimitive.content) }, opened.draws)
-        }
+    fun t002_frozenCivsKeepTheirIds() {
+        val names = CIVS.take(frozen.size).map { it.name }
+        assertEquals("share links and saved data refer to civs by ID", frozen.take(CIVS.size), names)
     }
 
     @Test
-    fun `a share link can name every civ (format 1 spends one character per draw)`() {
+    fun t003_everyCivHasItsIdFrozen() {
+        val unfrozen = CIVS.drop(frozen.size).map { it.name }
+        assertEquals("not in the frozen civ IDs: add them in the web version", emptyList<String>(), unfrozen)
+    }
+
+    @Test
+    fun t004_earlierLinksStillOpen() {
+        val unopened = links.filter { opened(it) == null }.map { it.text("note") }
+        assertEquals(emptyList<String>(), unopened)
+    }
+
+    @Test
+    fun t005_earlierLinksOpenWithTheirEdition() {
+        assertEquals(emptyList<String>(), notesWhere { f, link -> link.edition != f.text("edition") })
+    }
+
+    @Test
+    fun t006_earlierLinksOpenWithTheirCivsOff() {
+        val wrong = notesWhere { f, link ->
+            val edition = f.text("edition")
+            val off = CIVS.filter { logic.inEdition(it, edition) && !link.enabled[it.id] }.map { it.name }
+            off != f.texts("off")
+        }
+        assertEquals(emptyList<String>(), wrong)
+    }
+
+    @Test
+    fun t007_earlierLinksOpenWithTheirDraws() {
+        assertEquals(emptyList<String>(), notesWhere { f, link -> link.draws != f.texts("draws").map(::idOf) })
+    }
+
+    @Test
+    fun t008_aLinkCanNameEveryCiv() {
         assertTrue("${CIVS.size} civs, but link format 1 can only name ${B64.length}", CIVS.size <= B64.length)
     }
 
     @Test
-    fun `civ names and edition IDs are single words, as preset files split their lines on spaces`() {
-        for (c in CIVS) assertTrue("civ ${c.id}", Regex("\\S+").matches(c.name) && !c.name.endsWith(":"))
-        for (ed in EDITIONS) assertTrue(ed, Regex("\\S+").matches(ed))
+    fun t009_civNamesAreSingleWords() {
+        val broken = CIVS.filter { !word.matches(it.name) || it.name.endsWith(":") }.map { it.name }
+        assertEquals(emptyList<String>(), broken)
+    }
+
+    @Test
+    fun t010_editionIdsAreSingleWords() {
+        assertEquals(emptyList<String>(), EDITIONS.filter { !word.matches(it) })
     }
 }

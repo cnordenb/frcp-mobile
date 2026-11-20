@@ -1,17 +1,14 @@
-package net.frcp.app
+package net.frcp.app.picker
 
+import net.frcp.app.device.Assets
 import net.frcp.app.logic.Civ
+import net.frcp.app.logic.Draw
 import net.frcp.app.logic.Logic
 import net.frcp.app.logic.PickerState
 import net.frcp.app.logic.SharedLink
 
-/** One line of a log: a civ's icon and its text. */
 class LogRow(val icon: String, val text: String)
 
-/**
- * What the screen shows of the picker, worked out once per change, as the web version's render() does. [state] is a
- * copy that nothing changes.
- */
 class PickerView(logic: Logic, val state: PickerState, val flash: String?) {
     val pool = logic.poolIds(state)
     val drawn = logic.drawnCount(state)
@@ -19,7 +16,6 @@ class PickerView(logic: Logic, val state: PickerState, val flash: String?) {
     val current: Civ? = logic.round(state).lastOrNull()?.let { logic.civs[it.id] }
     val editionTotal = logic.editionTotal(state.edition)
 
-    /** The drawn log's rounds, newest first, each listing its draws newest first. */
     val drawnRounds: List<List<LogRow>> = state.log.asReversed().filter { it.isNotEmpty() }.map { r ->
         r.asReversed().map { d ->
             val civ = logic.civs[d.id]
@@ -27,13 +23,11 @@ class PickerView(logic: Logic, val state: PickerState, val flash: String?) {
         }
     }
 
-    /** The civs left this round, in alphabetical order. */
     val remainingRows: List<LogRow> = remaining.toSet().let { left ->
         logic.displayOrder.filter { it.id in left }.map { LogRow(Assets.civIcon(it.file), it.name) }
     }
 }
 
-/** Something the screen does for the view model: open another app or a file picker. */
 sealed interface Effect {
     data class OpenUrl(val url: String) : Effect
     data class Share(val text: String) : Effect
@@ -49,8 +43,6 @@ sealed interface Dialog {
     data class Message(val title: String, val text: String) : Dialog
 }
 
-/** A status message. Its serial tells two of the same text apart, so the second shows too. */
 data class Toast(val text: String, val serial: Long)
 
-/** On the Draw tab, a swipe left draws, right undoes, up re-rolls and down resets. */
 enum class SwipeKind { Draw, Undo, Reroll, Reset }

@@ -1,22 +1,24 @@
-package net.frcp.app
+package net.frcp.app.picker
 
 import android.net.Uri
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import net.frcp.app.device.Assets
+import net.frcp.app.device.PresetFiles
+import net.frcp.app.device.SoundPlayer
+import net.frcp.app.device.Store
+import net.frcp.app.device.UiSound
+import net.frcp.app.logic.CIVS
 import net.frcp.app.logic.MersenneTwister
 import net.frcp.app.logic.PickerState
 import net.frcp.app.logic.logic
+import net.frcp.app.logic.makeState
 import net.frcp.app.logic.seeded
 import net.frcp.app.ui.Images
 
-// What the view model tests share: the view model with the app's data, and stand-ins for what it needs from the
-// phone, which keep what it saved and played. The random source is seeded, so every run draws the same civs.
-
-/** Saved settings and state, kept in memory. */
 class MemoryStore(override var settings: String? = null, override var state: String? = null) : Store
 
-/** The sounds loaded and played, in order. */
 class SoundLog : SoundPlayer {
     val loaded = mutableListOf<String>()
     val played = mutableListOf<String>()
@@ -35,13 +37,11 @@ class SoundLog : SoundPlayer {
     }
 }
 
-/** No test picks a preset file: they load a preset's text with loadPresetText. */
 private object NoFiles : PresetFiles {
     override suspend fun write(uri: Uri, text: String) = error("the tests write no files")
     override suspend fun read(uri: Uri, max: Int) = error("the tests read no files")
 }
 
-/** A picker as the app opens it, with this saved state and these settings. */
 class TestPicker(
     state: PickerState? = null,
     settings: Settings = Settings(),
@@ -51,30 +51,37 @@ class TestPicker(
     val sounds = SoundLog()
     val vm = PickerViewModel(logic, Images { error("the tests decode no images") }, store, sounds, NoFiles, rng)
 
-    /** The state the picker saved last. */
     val saved get() = logic.parseState(store.state)
 
-    /** The settings the picker saved last. */
     val savedSettings get() = Settings.parse(store.settings)
 
-    /** The last sound played, or null for none. */
     val lastSound get() = sounds.played.lastOrNull()
 
-    /** The current civ's ID, or null before the round's first draw. */
     val current get() = vm.view.current?.id
 
-    /** The IDs drawn this round, in order. */
     val round get() = vm.view.state.log.last().map { it.id }
 
-    /** Something the picker asked the screen to do, if it did. */
+    val totalDraws get() = vm.view.state.log.sumOf { it.size }
+
     fun effect(): Effect? = runBlocking { withTimeoutOrNull(100) { vm.effects.first() } }
 }
 
+val ERROR_SOUND = uiSound(UiSound.Error)
+
 fun uiSound(s: UiSound) = Assets.uiSound(s.file)
 
-/** The jingle of a civ, or random's for null: its legacy jingle, if it has one, with [legacy] jingles on. */
 fun jingleOf(id: Int?, legacy: Boolean = true): String {
     if (id == null) return Assets.jingle(Assets.RANDOM, legacy)
     val c = logic.civs[id]
     return Assets.jingle(c.file, legacy && c.legacy)
+}
+
+fun drawnPicker(n: Int, settings: Settings = Settings()) =
+    TestPicker(settings = settings).also { p -> repeat(n) { p.vm.draw() } }
+
+fun onlyCiv(name: String) = makeState(off = CIVS.filter { it.name != name }.map { it.name })
+
+fun sharedLink(p: TestPicker, withDraws: Boolean): String {
+    p.vm.shareLink(withDraws)
+    return (p.effect() as Effect.Share).text
 }

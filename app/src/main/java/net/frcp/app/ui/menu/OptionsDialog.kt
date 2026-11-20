@@ -1,4 +1,4 @@
-package net.frcp.app.ui
+package net.frcp.app.ui.menu
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,13 +22,19 @@ import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import net.frcp.app.PickerViewModel
-import net.frcp.app.Settings
+import net.frcp.app.logic.Civ
+import net.frcp.app.logic.Draw
+import net.frcp.app.logic.Edition
+import net.frcp.app.picker.PickerViewModel
+import net.frcp.app.picker.Settings
+import net.frcp.app.ui.Ink
+import net.frcp.app.ui.Label
+import net.frcp.app.ui.widgets.CheckRow
+import net.frcp.app.ui.widgets.ParchmentDropdown
+import net.frcp.app.ui.widgets.ParchmentSlider
 
-/**
- * The Options dialog: display, sound, continuous freshness and what happens when the app opens. The web version's
- * tooltip and hotkey settings have no use on a phone.
- */
+private val JINGLE_TYPES = listOf("Definitive Edition", "Legacy")
+
 @Composable
 fun OptionsDialog(vm: PickerViewModel) {
     val s = vm.settings
@@ -41,20 +47,25 @@ fun OptionsDialog(vm: PickerViewModel) {
         }
         Fieldset("Sound") {
             OptionRow("Enable civ jingles", s.jingles) { vm.setJingles(!s.jingles) }
-            Row(Modifier.heightIn(min = 40.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.heightIn(min = 40.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Label("Jingle type", size = 14.sp)
-                ParchmentDropdown(listOf("Definitive Edition", "Legacy"), if (s.legacyJingles) 1 else 0, s.jingles, { vm.setLegacyJingles(it == 1) })
+                val type = if (s.legacyJingles) 1 else 0
+                ParchmentDropdown(JINGLE_TYPES, type, s.jingles, { vm.setLegacyJingles(it == 1) })
             }
             OptionRow("Enable UI sounds", s.uiSounds) { vm.setUiSounds(!s.uiSounds) }
         }
         Fieldset("Continuous freshness") {
             Option(vm, "Enable continuous freshness", s.fresh) { copy(fresh = !fresh) }
-            // The slider runs from 1 to half the pool. At its right end it means "the most", which follows the pool.
             val max = vm.logic.freshMax(n)
             val value = vm.logic.freshLimit(n, s.freshN)
+            val civs = if (value == 1) "civ" else "civs"
+            val most = if (value == max) " (the most)" else ""
             Label(
-                if (n < 2) "Needs at least 2 civs in the pool"
-                else "Exclude the last $value civ${if (value == 1) "" else "s"}${if (value == max) " (the most)" else ""}",
+                if (n < 2) "Needs at least 2 civs in the pool" else "Exclude the last $value $civs$most",
                 size = 14.sp,
             )
             ParchmentSlider(value, 1, max, s.fresh && n >= 2, { vm.setFreshN(it, max) }, vm::freshNSettled)
@@ -72,13 +83,11 @@ fun OptionsDialog(vm: PickerViewModel) {
 private fun OptionRow(text: String, checked: Boolean, onToggle: () -> Unit) =
     CheckRow(text, checked, onToggle, Modifier.fillMaxWidth().heightIn(min = 36.dp), size = 14.sp, gap = 8.dp)
 
-/** A checkbox for a setting that only needs saving. */
 @Composable
 private fun Option(vm: PickerViewModel, text: String, checked: Boolean, change: Settings.() -> Settings) {
     OptionRow(text, checked) { vm.toggleSetting(change) }
 }
 
-/** A group of settings in a frame, with its legend set into the frame's top edge. */
 @Composable
 private fun Fieldset(legend: String, content: @Composable ColumnScope.() -> Unit) {
     var legendBox by remember { mutableStateOf(Rect.Zero) }
@@ -98,6 +107,7 @@ private fun Fieldset(legend: String, content: @Composable ColumnScope.() -> Unit
         },
     ) {
         Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 22.dp, bottom = 10.dp), content = content)
-        Label(legend, Modifier.padding(start = 10.dp).onGloballyPositioned { legendBox = it.boundsInParent() }, size = 14.sp, bold = true)
+        val measured = Modifier.padding(start = 10.dp).onGloballyPositioned { legendBox = it.boundsInParent() }
+        Label(legend, measured, size = 14.sp, bold = true)
     }
 }

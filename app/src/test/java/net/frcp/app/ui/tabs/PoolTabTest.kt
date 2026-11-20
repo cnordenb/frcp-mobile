@@ -1,47 +1,52 @@
-package net.frcp.app.ui
+package net.frcp.app.ui.tabs
 
 import net.frcp.app.logic.EDITIONS
 import net.frcp.app.logic.logic
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.FixMethodOrder
 import org.junit.Test
+import org.junit.runners.MethodSorters
 
-// The Pool tab's civs and DLC toggles. The civs never scroll and never move: an older edition leaves the places of
-// the newer civs empty, and only as many DLC toggles show as leave the civs their room.
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class PoolTabTest {
     private val newest = EDITIONS.maxBy { logic.editionInfo.getValue(it).year }
 
     @Test
-    fun `the newest edition's grid holds every civ in alphabetical order, three to a row`() {
-        val grid = civGrid(logic, newest)
-        assertEquals(logic.displayOrder, grid.flatten())
-        assertTrue(grid.dropLast(1).all { it.size == 3 })
+    fun t328_newestEditionsGridHoldsEveryCivInAlphabeticalOrder() {
+        assertEquals(logic.displayOrder, civGrid(logic, newest).flatten())
     }
 
     @Test
-    fun `every civ keeps its place in every edition, and newer civs leave theirs empty`() {
+    fun t329_gridHasThreeCivsToARow() {
+        val sizes = civGrid(logic, newest).dropLast(1).map { it.size }.distinct()
+        assertEquals(listOf(3), sizes)
+    }
+
+    @Test
+    fun t330_gridHasTheSameNumberOfRowsInEveryEdition() {
         val rows = civGrid(logic, newest).size
-        for (ed in EDITIONS) {
-            val grid = civGrid(logic, ed)
-            assertEquals(ed, rows, grid.size)
-            grid.flatten().forEachIndexed { i, c ->
-                val civ = logic.displayOrder[i]
-                assertEquals("$ed, place $i", if (logic.inEdition(civ, ed)) civ else null, c)
-            }
-        }
+        assertEquals(EDITIONS.map { rows }, EDITIONS.map { civGrid(logic, it).size })
     }
 
     @Test
-    fun `the DLC toggles left out are toggles data json has, so leaving them out still works`() {
+    fun t331_everyCivKeepsItsPlaceInEveryEditionAndNewerCivsLeaveTheirsEmpty() {
+        val misplaced = EDITIONS.flatMap { ed ->
+            civGrid(logic, ed).flatten().withIndex()
+                .filter { (i, c) -> c != logic.displayOrder[i].takeIf { logic.inEdition(it, ed) } }
+                .map { (i, _) -> "$ed, place $i" }
+        }
+        assertEquals(emptyList<String>(), misplaced)
+    }
+
+    @Test
+    fun t332_hiddenDlcTogglesAreTogglesTheDataHas() {
         val toggles = EDITIONS.flatMap { logic.editionInfo.getValue(it).dlcToggles }
-        for (dlc in HIDDEN_DLC_TOGGLES) assertTrue(dlc, dlc in toggles)
+        assertEquals(emptyList<String>(), HIDDEN_DLC_TOGGLES.filter { it !in toggles })
     }
 
     @Test
-    fun `each edition's DLC toggles fit in three rows of two, which leaves the civs their room`() {
-        for (ed in EDITIONS) {
-            val shown = shownDlcToggles(logic.editionInfo.getValue(ed))
-            assertTrue("$ed shows ${shown.size} DLC toggles", (shown.size + 1) / 2 <= 3)
-        }
+    fun t333_eachEditionsShownDlcTogglesFitInThreeRowsOfTwo() {
+        val crowded = EDITIONS.filter { (shownDlcToggles(logic.editionInfo.getValue(it)).size + 1) / 2 > 3 }
+        assertEquals(emptyList<String>(), crowded)
     }
 }

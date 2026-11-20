@@ -2,105 +2,162 @@ package net.frcp.app.logic
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.FixMethodOrder
 import org.junit.Test
+import org.junit.runners.MethodSorters
 
-// Preset files, in the desktop app's .txt format. The fixtures hold files the desktop app wrote (desktop-log.txt,
-// desktop-v1.3.2.txt) and one written to its WriteLogFile rules (round-start.txt).
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class PresetTest {
+    private val emptyLog = listOf(emptyList<Draw>())
+    private val anyOrder = "EditionState:\nHD\nDrawnCivs:\nBritons\nWu\nCivStates:\nCelts 0\n\nDrawnCivs:\nFranks\n"
+    private val unknownParts = "EditionState:\nXX\nDrawnCivs:\nCelts\nNonsense\nCelts\nFranks\n"
+
     private fun preset(name: String) = fixture("presets/$name")
     private fun loaded(text: String) = logic.emptyState().also { logic.applyPreset(it, logic.parsePreset(text)!!) }
 
-    /** The lines of one section of a preset file. */
     private fun section(text: String, header: String): List<String> {
         val lines = text.split("\r\n")
         val at = lines.indexOf(header)
         return if (at < 0) emptyList() else lines.drop(at + 1).takeWhile { it.isNotEmpty() && !it.endsWith(":") }
     }
 
+    private fun mixedState() = makeState(
+        edition = "HD",
+        off = listOf("Celts"),
+        log = listOf(listOf(Named("Huns", 1, 30), Named("Celts", 2, 31), Named("Franks", 2, 30))),
+    )
+
+    private fun savedWithoutHistory() = logic.presetText(mixedState(), false)
+
     @Test
-    fun `a preset the desktop app wrote mid-round loads its pool, edition and draws`() {
+    fun t072_desktopPresetLoadsItsEdition() {
+        assertEquals("DE", loaded(preset("desktop-log.txt")).edition)
+    }
+
+    @Test
+    fun t073_desktopPresetLeavesTheCivsItDoesNotListOn() {
+        assertEquals(0, loaded(preset("desktop-log.txt")).off.size)
+    }
+
+    @Test
+    fun t074_desktopPresetLoadsItsDrawsAsOneRound() {
         val text = preset("desktop-log.txt")
-        val s = loaded(text)
         val draws = section(text, "DrawnCivs:")
-        assertEquals("DE", s.edition)
-        assertEquals("its civs are all on, and the civs it doesn't list stay on", 0, s.off.size)
-        // Its freshness history is all from this round, so there's no earlier round.
-        assertEquals(listOf(draws.mapIndexed { i, name -> Named(name, i + 1, CIVS.size) }), namedLog(s))
+        assertEquals(listOf(draws.mapIndexed { i, name -> Named(name, i + 1, CIVS.size) }), namedLog(loaded(text)))
     }
 
     @Test
-    fun `a preset from an older desktop app loads, passing over civ names it no longer has`() {
+    fun t075_olderDesktopPresetStillHasItsOldCivNames() {
         val text = preset("desktop-v1.3.2.txt")
-        assertTrue("the file still has the old names", "Incas 1" in text && "Mayans 1" in text)
-        val s = loaded(text)
+        assertTrue("Incas 1" in text && "Mayans 1" in text)
+    }
+
+    @Test
+    fun t076_olderDesktopPresetLoadsItsPoolPassingOverOldNames() {
+        val s = loaded(preset("desktop-v1.3.2.txt"))
         assertEquals(listOf("Bulgarians", "Goths", "Persians", "Sicilians"), namesOf(s.off.sorted()))
-        assertEquals(listOf(emptyList<Draw>()), s.log)
     }
 
     @Test
-    fun `a desktop preset loads and saves back byte for byte`() {
-        val text = preset("round-start.txt")
-        val s = loaded(text)
-        assertEquals(listOf("Aztecs", "Wu"), namesOf(s.off.sorted()))
-        // The civs of the freshness history from before this round make an earlier round, without counts.
-        assertEquals(
-            listOf(
-                listOf(Named("Huns", 0, 0), Named("Franks", 0, 0), Named("Teutons", 0, 0)),
-                listOf(Named("Celts", 1, CIVS.size - 2), Named("Mongols", 2, CIVS.size - 2)),
-            ),
-            namedLog(s),
+    fun t077_olderDesktopPresetWithoutDrawsLoadsAnEmptyRound() {
+        assertEquals(emptyLog, loaded(preset("desktop-v1.3.2.txt")).log)
+    }
+
+    @Test
+    fun t078_roundStartPresetLoadsItsCivsOff() {
+        assertEquals(listOf("Aztecs", "Wu"), namesOf(loaded(preset("round-start.txt")).off.sorted()))
+    }
+
+    @Test
+    fun t079_roundStartPresetsEarlierHistoryMakesARoundWithoutCounts() {
+        val expected = listOf(
+            listOf(Named("Huns", 0, 0), Named("Franks", 0, 0), Named("Teutons", 0, 0)),
+            listOf(Named("Celts", 1, CIVS.size - 2), Named("Mongols", 2, CIVS.size - 2)),
         )
-        assertEquals(text, logic.presetText(s, true))
+        assertEquals(expected, namedLog(loaded(preset("round-start.txt"))))
     }
 
     @Test
-    fun `a saved preset lists every civ in ID order, this round's draws of civs that are on, and the edition`() {
-        val s = makeState(edition = "HD", off = listOf("Celts"), log = listOf(listOf(Named("Huns", 1, 30), Named("Celts", 2, 31), Named("Franks", 2, 30))))
-        val text = logic.presetText(s, false)
-        assertTrue("every line ends in CRLF", text.endsWith("\r\n") && !Regex("[^\r]\n").containsMatchIn(text))
-        assertEquals(CIVS.map { "${it.name} ${if (it.id in s.off) 0 else 1}" }, section(text, "CivStates:"))
-        assertEquals(listOf("Huns", "Franks"), section(text, "DrawnCivs:"))
-        assertEquals(listOf("HD"), section(text, "EditionState:"))
-        assertFalse("no freshness history with continuous freshness off", "ContfreshCivArray:" in text)
+    fun t080_desktopPresetSavesBackByteForByte() {
+        val text = preset("round-start.txt")
+        assertEquals(text, logic.presetText(loaded(text), true))
     }
 
     @Test
-    fun `a saved preset's freshness history holds as many of the newest civs as could sit out, oldest first`() {
+    fun t081_savedPresetEndsEveryLineInCrLf() {
+        val text = savedWithoutHistory()
+        assertTrue(text.endsWith("\r\n") && !Regex("[^\r]\n").containsMatchIn(text))
+    }
+
+    @Test
+    fun t082_savedPresetListsEveryCivInIdOrderWithItsState() {
+        val off = mixedState().off
+        val expected = CIVS.map { "${it.name} ${if (it.id in off) 0 else 1}" }
+        assertEquals(expected, section(savedWithoutHistory(), "CivStates:"))
+    }
+
+    @Test
+    fun t083_savedPresetListsThisRoundsDrawsOfCivsThatAreOn() {
+        assertEquals(listOf("Huns", "Franks"), section(savedWithoutHistory(), "DrawnCivs:"))
+    }
+
+    @Test
+    fun t084_savedPresetNamesItsEdition() {
+        assertEquals(listOf("HD"), section(savedWithoutHistory(), "EditionState:"))
+    }
+
+    @Test
+    fun t085_savedPresetHasNoHistoryWithFreshnessOff() {
+        assertFalse("ContfreshCivArray:" in savedWithoutHistory())
+    }
+
+    @Test
+    fun t086_savedPresetsHistoryHoldsTheNewestCivsThatCouldSitOut() {
         val past = CIVS.mapIndexed { i, c -> Named(c.name, i + 1, CIVS.size) }
-        val s = makeState(log = listOf(past, listOf(Named("Celts", 1, CIVS.size), Named("Franks", 2, CIVS.size))))
-        val half = CIVS.size / 2
-        val newest = past.map { it.name }.filter { it != "Celts" && it != "Franks" }.takeLast(half - 2) + listOf("Celts", "Franks")
-        assertEquals(newest, section(logic.presetText(s, true), "ContfreshCivArray:"))
+        val round = listOf(Named("Celts", 1, CIVS.size), Named("Franks", 2, CIVS.size))
+        val s = makeState(log = listOf(past, round))
+        val earlier = past.map { it.name }.filter { it != "Celts" && it != "Franks" }.takeLast(CIVS.size / 2 - 2)
+        assertEquals(earlier + listOf("Celts", "Franks"), section(logic.presetText(s, true), "ContfreshCivArray:"))
     }
 
     @Test
-    fun `a preset is read from the default edition with every civ on, in any section order, to the first empty line`() {
-        val s = loaded("EditionState:\nHD\nDrawnCivs:\nBritons\nWu\nCivStates:\nCelts 0\n\nDrawnCivs:\nFranks\n")
-        assertEquals("HD", s.edition)
-        assertEquals("Wu isn't in HD, and the second DrawnCivs is past the empty line", listOf(listOf(Named("Britons", 1, 30))), namedLog(s))
-        assertTrue(idOf("Celts") in s.off)
+    fun t087_presetsEditionIsReadFromAnySectionOrder() {
+        assertEquals("HD", loaded(anyOrder).edition)
     }
 
     @Test
-    fun `a preset with an unknown edition keeps the default one, and repeated or unknown draws are passed over`() {
-        val s = loaded("EditionState:\nXX\nDrawnCivs:\nCelts\nNonsense\nCelts\nFranks\n")
-        assertEquals(EDITIONS[0], s.edition)
-        assertEquals(listOf(listOf(Named("Celts", 1, CIVS.size), Named("Franks", 2, CIVS.size))), namedLog(s))
+    fun t088_presetIsReadToTheFirstEmptyLineWithoutCivsOfNewerEditions() {
+        assertEquals(listOf(listOf(Named("Britons", 1, 30))), namedLog(loaded(anyOrder)))
     }
 
     @Test
-    fun `text with none of the sections isn't a preset`() {
-        for (text in listOf("", "\r\n", "hello\r\nworld\r\n", "Celts 1\r\nFranks 0\r\n", "\r\nCivStates:\r\nCelts 0\r\n")) {
-            assertNull(text, logic.parsePreset(text))
-        }
+    fun t089_presetsCivStatesAreReadAfterOtherSections() {
+        assertTrue(idOf("Celts") in loaded(anyOrder).off)
     }
 
     @Test
-    fun `after loading a preset, its earlier civs keep sitting out of the next draws`() {
+    fun t090_presetWithAnUnknownEditionKeepsTheDefaultOne() {
+        assertEquals(EDITIONS[0], loaded(unknownParts).edition)
+    }
+
+    @Test
+    fun t091_presetsRepeatedAndUnknownDrawsArePassedOver() {
+        val expected = listOf(listOf(Named("Celts", 1, CIVS.size), Named("Franks", 2, CIVS.size)))
+        assertEquals(expected, namedLog(loaded(unknownParts)))
+    }
+
+    @Test
+    fun t092_textWithNoneOfTheSectionsIsNotAPreset() {
+        val texts = listOf("", "\r\n", "hello\r\nworld\r\n", "Celts 1\r\nFranks 0\r\n", "\r\nCivStates:\r\nCelts 0\r\n")
+        assertEquals(emptyList<String>(), texts.filter { logic.parsePreset(it) != null })
+    }
+
+    @Test
+    fun t093_loadedPresetsEarlierCivsKeepSittingOut() {
         val s = loaded(preset("round-start.txt"))
         val candidates = logic.drawCandidates(s, Freshness(true, 1000))
-        for (name in listOf("Huns", "Franks", "Teutons", "Celts", "Mongols")) assertFalse(name, idOf(name) in candidates)
+        val sittingOut = listOf("Huns", "Franks", "Teutons", "Celts", "Mongols")
+        assertEquals(emptyList<String>(), sittingOut.filter { idOf(it) in candidates })
     }
 }

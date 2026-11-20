@@ -17,7 +17,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
-/** The parchment theme's colours, from the web version's style.css. */
 object Ink {
     val Text = Color.Black
     val Brown = Color(0xFF3D2C1C)
@@ -35,13 +34,8 @@ object Ink {
     val Group = Color(0x593C2814)
 }
 
-/** A civ or DLC that's off turns grey. */
 val Grayscale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
 
-/**
- * The page's type: the web version asks for Georgia, which a phone doesn't have, so a phone's browser shows its serif.
- * The app does the same.
- */
 fun textStyle(
     size: TextUnit = 13.sp,
     bold: Boolean = false,
@@ -81,7 +75,6 @@ fun Label(
     overflow = TextOverflow.Clip,
 )
 
-/** Text with links in it, which open in the browser when tapped. */
 @Composable
 fun Paragraph(text: AnnotatedString, modifier: Modifier = Modifier, size: TextUnit = 14.sp, color: Color = Ink.Text) =
     BasicText(text, modifier, style = textStyle(size, color = color))

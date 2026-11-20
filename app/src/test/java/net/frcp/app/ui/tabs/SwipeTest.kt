@@ -1,74 +1,131 @@
-package net.frcp.app.ui
+package net.frcp.app.ui.tabs
 
-import net.frcp.app.SwipeKind
+import net.frcp.app.picker.SwipeKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.FixMethodOrder
 import org.junit.Test
+import org.junit.runners.MethodSorters
 
-// The Draw tab's swipes, as the web version's swipe test has them: which way does what, how the first pixels settle
-// the swipe's axis, where the civ icon and the incoming civ's ghost sit as the finger moves, and the glide after it
-// lifts. The view model tests check what each swipe then does.
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class SwipeTest {
     private val travel = 120f
+    private val otherKinds = listOf(SwipeKind.Undo, SwipeKind.Reroll, SwipeKind.Reset)
 
     @Test
-    fun `a swipe left draws, right undoes, up re-rolls and down resets`() {
+    fun t306_swipeLeftDraws() {
         assertEquals(SwipeKind.Draw, swipeKind(true, -50f))
+    }
+
+    @Test
+    fun t307_swipeRightUndoes() {
         assertEquals(SwipeKind.Undo, swipeKind(true, 50f))
+    }
+
+    @Test
+    fun t308_swipeUpRerolls() {
         assertEquals(SwipeKind.Reroll, swipeKind(false, -50f))
+    }
+
+    @Test
+    fun t309_swipeDownResets() {
         assertEquals(SwipeKind.Reset, swipeKind(false, 50f))
     }
 
     @Test
-    fun `the axis settles once the finger is past the slop, the way it went further`() {
+    fun t310_axisIsUnsettledWhileTheFingerIsWithinTheSlop() {
         assertNull(swipeAxis(6f, -8f, 10f))
+    }
+
+    @Test
+    fun t311_axisSettlesSidewaysWhenTheFingerWentFurtherSideways() {
         assertEquals(true, swipeAxis(-12f, 5f, 10f))
+    }
+
+    @Test
+    fun t312_axisSettlesUpAndDownWhenTheFingerWentFurtherThatWay() {
         assertEquals(false, swipeAxis(4f, 15f, 10f))
-        assertEquals("a diagonal goes up or down", false, swipeAxis(11f, -11f, 10f))
     }
 
     @Test
-    fun `a swipe left takes the current civ towards the edge with the finger, fading it out, with no ghost`() {
-        for (t in listOf(0f, 30f, 90f)) {
-            val (icon, ghost) = swipePlaces(SwipeKind.Draw, t, travel, false)
-            assertEquals(IconPlace(t, 1 - t / travel), icon)
-            assertNull(ghost)
-        }
+    fun t313_diagonalSwipeSettlesUpAndDown() {
+        assertEquals(false, swipeAxis(11f, -11f, 10f))
     }
 
     @Test
-    fun `the other swipes bring the next civ in from the edge with the finger, as the current one fades in place`() {
-        for (kind in listOf(SwipeKind.Undo, SwipeKind.Reroll, SwipeKind.Reset)) {
-            val (icon, ghost) = swipePlaces(kind, 30f, travel, false)
-            assertEquals(kind.name, IconPlace(0f, 0.75f), icon)
-            assertEquals(kind.name, IconPlace(90f, 0.25f), ghost)
-        }
+    fun t314_drawSwipeTakesTheCurrentCivTowardsTheEdgeFadingItOut() {
+        val moved = listOf(0f, 30f, 90f)
+        val icons = moved.map { swipePlaces(SwipeKind.Draw, it, travel, false).first }
+        assertEquals(moved.map { IconPlace(it, 1 - it / travel) }, icons)
     }
 
     @Test
-    fun `once a swipe acts, the civ icon shows the new civ and the ghost the old one, each where it was`() {
-        val (drawIcon, drawGhost) = swipePlaces(SwipeKind.Draw, 60f, travel, true)
-        assertEquals(IconPlace(0f, 1f), drawIcon)
-        assertEquals(IconPlace(60f, 0.5f), drawGhost)
-        val (undoIcon, undoGhost) = swipePlaces(SwipeKind.Undo, 60f, travel, true)
-        assertEquals(IconPlace(60f, 0.5f), undoIcon)
-        assertEquals(IconPlace(0f, 0.5f), undoGhost)
+    fun t315_drawSwipeShowsNoGhostBeforeItActs() {
+        val ghosts = listOf(0f, 30f, 90f).map { swipePlaces(SwipeKind.Draw, it, travel, false).second }
+        assertEquals(listOf<IconPlace?>(null, null, null), ghosts)
     }
 
     @Test
-    fun `at the end of its travel the new civ is in place and the old one gone`() {
-        for (kind in SwipeKind.entries) {
-            val (icon, ghost) = swipePlaces(kind, travel, travel, true)
-            assertEquals(kind.name, IconPlace(0f, 1f), icon)
-            assertEquals(kind.name, 0f, ghost!!.alpha, 0f)
-        }
+    fun t316_otherSwipesFadeTheCurrentCivInPlace() {
+        val icons = otherKinds.map { swipePlaces(it, 30f, travel, false).first }
+        assertEquals(otherKinds.map { IconPlace(0f, 0.75f) }, icons)
     }
 
     @Test
-    fun `a lifted swipe glides on from the finger's speed, taking 80 to 350 ms`() {
+    fun t317_otherSwipesBringTheNextCivInFromTheEdgeWithTheFinger() {
+        val ghosts = otherKinds.map { swipePlaces(it, 30f, travel, false).second }
+        assertEquals(otherKinds.map { IconPlace(90f, 0.25f) }, ghosts)
+    }
+
+    @Test
+    fun t318_actedDrawSwipeShowsTheNewCivInPlace() {
+        assertEquals(IconPlace(0f, 1f), swipePlaces(SwipeKind.Draw, 60f, travel, true).first)
+    }
+
+    @Test
+    fun t319_actedDrawSwipeLeavesTheOldCivAsAGhostWhereItWas() {
+        assertEquals(IconPlace(60f, 0.5f), swipePlaces(SwipeKind.Draw, 60f, travel, true).second)
+    }
+
+    @Test
+    fun t320_actedUndoSwipeShowsTheNewCivWhereTheGhostWas() {
+        assertEquals(IconPlace(60f, 0.5f), swipePlaces(SwipeKind.Undo, 60f, travel, true).first)
+    }
+
+    @Test
+    fun t321_actedUndoSwipeLeavesTheOldCivAsAGhostInPlace() {
+        assertEquals(IconPlace(0f, 0.5f), swipePlaces(SwipeKind.Undo, 60f, travel, true).second)
+    }
+
+    @Test
+    fun t322_atTheEndOfItsTravelTheNewCivIsInPlace() {
+        val icons = SwipeKind.entries.map { swipePlaces(it, travel, travel, true).first }
+        assertEquals(SwipeKind.entries.map { IconPlace(0f, 1f) }, icons)
+    }
+
+    @Test
+    fun t323_atTheEndOfItsTravelTheOldCivIsGone() {
+        val alphas = SwipeKind.entries.map { swipePlaces(it, travel, travel, true).second?.alpha }
+        assertEquals(SwipeKind.entries.map { 0f }, alphas)
+    }
+
+    @Test
+    fun t324_liftedSwipeGlidesOnFromTheFingersSpeed() {
         assertEquals(200f, glideMillis(100f, 1f), 0.001f)
-        assertEquals("a slow finger", 350f, glideMillis(100f, 0.05f), 0f)
-        assertEquals("a finger that stopped", 350f, glideMillis(100f, 0f), 0f)
-        assertEquals("a fast finger", 80f, glideMillis(100f, 10f), 0f)
+    }
+
+    @Test
+    fun t325_slowFingerGlidesForAtMost350Milliseconds() {
+        assertEquals(350f, glideMillis(100f, 0.05f), 0f)
+    }
+
+    @Test
+    fun t326_stoppedFingerGlidesFor350Milliseconds() {
+        assertEquals(350f, glideMillis(100f, 0f), 0f)
+    }
+
+    @Test
+    fun t327_fastFingerGlidesForAtLeast80Milliseconds() {
+        assertEquals(80f, glideMillis(100f, 10f), 0f)
     }
 }

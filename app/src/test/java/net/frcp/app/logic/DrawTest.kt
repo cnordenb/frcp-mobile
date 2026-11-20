@@ -1,16 +1,17 @@
 package net.frcp.app.logic
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.FixMethodOrder
 import org.junit.Test
+import org.junit.runners.MethodSorters
 
-// Drawing: whole rounds, continuous freshness, and the fairness of the next draw picked ahead of time.
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class DrawTest {
-    private val most = 1000 // a freshness setting at or above half the pool means "the most", as in Settings
+    private val most = 1000
+    private val twenty = (0..19).toList()
 
-    /** Draws n civs as the app does, asking the picker for the next draw each time. */
     private fun play(s: PickerState, f: Freshness, rng: MersenneTwister, n: Int): List<Int> {
         val picker = Picker(rng)
         return List(n) {
@@ -20,155 +21,204 @@ class DrawTest {
         }
     }
 
-    /** How often each of the ids comes out of trials runs of pick(). */
-    private fun countPicks(ids: IntRange, trials: Int, pick: () -> Int?): Map<Int, Int> {
-        val counts = ids.associateWithTo(mutableMapOf()) { 0 }
-        repeat(trials) {
-            val id = pick()
-            assertTrue("picked $id, which isn't one of the civs", id in counts)
-            counts[id!!] = counts.getValue(id) + 1
+    private fun twoCivs() = makeState(edition = "AOK", off = allBut("Britons", "Celts"))
+
+    private fun brokenRounds(start: PickerState, f: Freshness): List<String> {
+        val s = start.deepCopy()
+        val pool = logic.poolIds(s)
+        val rounds = play(s, f, seeded(), pool.size * 12).chunked(pool.size)
+        return rounds.indices.filter { rounds[it].sorted() != pool }.map { "round ${it + 1} of ${pool.size} with $f" }
+    }
+
+    private fun staleDraws(freshN: Int): List<String> {
+        val s = makeState()
+        val size = logic.poolIds(s).size
+        val n = minOf(freshN, logic.freshMax(size))
+        val draws = play(s, Freshness(true, freshN), seeded(), size * 30)
+        return (size until draws.size step size).flatMap { start ->
+            (0 until n).filter { j -> draws[start + j] in draws.subList(start - (n - j), start) }
+                .map { j -> "freshness $freshN: draw ${j + 1} of the round starting at $start" }
         }
-        return counts
     }
 
-    private fun assertEven(counts: Map<Int, Int>) {
-        val df = counts.size - 1
-        val chi = chiSquare(counts)
-        assertTrue("uneven picks (chi-square $chi for $df degrees of freedom): $counts", chi < chiSquareLimit(df))
-    }
-
-    private val twoCivs get() = makeState(edition = "AOK", off = CIVS.filter { it.name !in listOf("Britons", "Celts") }.map { it.name })
-
-    @Test
-    fun `the Mersenne Twister gives the reference outputs of mt19937ar_c`() {
-        assertEquals(3499211612L, MersenneTwister(5489).nextUint32())
-        val mt = MersenneTwister(intArrayOf(0x123, 0x234, 0x345, 0x456))
-        assertEquals(listOf(1067595299L, 955945823L, 477289528L, 4107218783L, 4228976476L), List(5) { mt.nextUint32() })
-    }
-
-    @Test
-    fun `the Mersenne Twister's integers stay in range and refuse bad ranges`() {
+    private fun picks(trials: Int, then: (Picker) -> Int?): List<Int?> {
         val rng = seeded()
-        repeat(1000) { assertTrue(rng.int(3, 7) in 3..7) }
-        assertEquals(4, rng.int(4, 4))
-        assertTrue(runCatching { rng.int(5, 4) }.exceptionOrNull() is IllegalArgumentException)
+        return List(trials) { then(Picker(rng)) }
+    }
+
+    private fun joining(picker: Picker): Int? {
+        picker.next((0..9).toList())
+        return picker.next((0..14).toList())
+    }
+
+    private fun dropping(picker: Picker): Int? {
+        picker.next((0..14).toList())
+        return picker.next((0..9).toList())
+    }
+
+    private fun swapping(picker: Picker): Int? {
+        picker.next((0..9).toList())
+        return picker.next((5..14).toList())
+    }
+
+    private fun strays(picked: List<Int?>, ids: IntRange) = picked.filter { it == null || it !in ids }.distinct()
+
+    private fun chiSquareOf(picked: List<Int?>, ids: IntRange) =
+        chiSquare(ids.associateWith { id -> picked.count { it == id } })
+
+    private fun unevenness(picked: List<Int?>, ids: IntRange) =
+        chiSquareOf(picked, ids) / chiSquareLimit(ids.count() - 1)
+
+    private fun movedPicks(change: (List<Int>, Int) -> List<Int>): Int {
+        val rng = seeded()
+        return (1..200).count {
+            val picker = Picker(rng)
+            val id = picker.next(twenty)!!
+            picker.next(change(twenty, id)) != id
+        }
     }
 
     @Test
-    fun `every civ in the pool comes up once a round, before any repeats`() {
-        val pools = listOf(makeState(), makeState(edition = "HD"), makeState(off = CIVS.filter { it.id % 3 == 0 }.map { it.name }))
+    fun t047_mersenneTwisterGivesTheReferenceOutputForASeed() {
+        assertEquals(3499211612L, MersenneTwister(5489).nextUint32())
+    }
+
+    @Test
+    fun t048_mersenneTwisterGivesTheReferenceOutputsForASeedArray() {
+        val mt = MersenneTwister(intArrayOf(0x123, 0x234, 0x345, 0x456))
+        val reference = listOf(1067595299L, 955945823L, 477289528L, 4107218783L, 4228976476L)
+        assertEquals(reference, List(5) { mt.nextUint32() })
+    }
+
+    @Test
+    fun t049_mersenneTwistersIntegersStayInRange() {
+        val rng = seeded()
+        assertEquals(emptyList<Int>(), List(1000) { rng.int(3, 7) }.filter { it !in 3..7 })
+    }
+
+    @Test
+    fun t050_mersenneTwistersRangeOfOneGivesThatNumber() {
+        assertEquals(4, seeded().int(4, 4))
+    }
+
+    @Test
+    fun t051_mersenneTwisterRefusesARangeTurnedAround() {
+        assertTrue(runCatching { seeded().int(5, 4) }.exceptionOrNull() is IllegalArgumentException)
+    }
+
+    @Test
+    fun t052_everyCivInThePoolComesUpOnceARound() {
+        val thirdOff = makeState(off = CIVS.filter { it.id % 3 == 0 }.map { it.name })
+        val pools = listOf(makeState(), makeState(edition = "HD"), thirdOff)
         val settings = listOf(Freshness(true, most), Freshness(true, 5), Freshness(false, most))
-        for (start in pools) {
-            for (f in settings) {
-                val s = start.deepCopy()
-                val pool = logic.poolIds(s)
-                for (r in play(s, f, seeded(), pool.size * 12).chunked(pool.size)) {
-                    assertEquals("a round of ${pool.size} with $f", pool, r.sorted())
-                }
-            }
-        }
+        val broken = pools.flatMap { start -> settings.flatMap { brokenRounds(start, it) } }
+        assertEquals(emptyList<String>(), broken)
     }
 
     @Test
-    fun `continuous freshness keeps the newest civs out of the next round's first draws`() {
-        for (freshN in listOf(1, 5, most)) {
-            val s = makeState()
-            val size = logic.poolIds(s).size
-            val n = minOf(freshN, logic.freshMax(size))
-            val draws = play(s, Freshness(true, freshN), seeded(), size * 30)
-            for (start in size until draws.size step size) {
-                // The j-th draw of a round still has the last n - j civs of the round before sitting out.
-                for (j in 0 until n) {
-                    val sittingOut = draws.subList(start - (n - j), start)
-                    assertFalse("freshness $freshN: draw ${j + 1} of a round repeats a civ from the last round's last ${n - j}", draws[start + j] in sittingOut)
-                }
-            }
-        }
+    fun t053_freshnessKeepsTheNewestCivsOutOfTheNextRoundsFirstDraws() {
+        assertEquals(emptyList<String>(), listOf(1, 5, most).flatMap(::staleDraws))
     }
 
     @Test
-    fun `without continuous freshness, a round can start with the civ the last one ended on`() {
-        val draws = play(twoCivs, Freshness(false, most), seeded(), 400)
+    fun t054_withoutFreshnessARoundCanStartWithTheLastCiv() {
+        val draws = play(twoCivs(), Freshness(false, most), seeded(), 400)
         assertTrue(draws.zipWithNext().any { (a, b) -> a == b })
     }
 
     @Test
-    fun `with continuous freshness, a pool of two civs takes turns`() {
-        val draws = play(twoCivs, Freshness(true, most), seeded(), 400)
+    fun t055_withFreshnessAPoolOfTwoCivsTakesTurns() {
+        val draws = play(twoCivs(), Freshness(true, most), seeded(), 400)
         assertTrue(draws.zipWithNext().all { (a, b) -> a != b })
     }
 
     @Test
-    fun `a pool of one civ draws it every time, and an empty pool has nothing to draw`() {
-        val one = makeState(off = CIVS.filter { it.name != "Celts" }.map { it.name })
-        assertTrue(play(one, Freshness(true, most), seeded(), 5).all { CIVS[it].name == "Celts" })
+    fun t056_poolOfOneCivDrawsItEveryTime() {
+        val one = makeState(off = allBut("Celts"))
+        assertEquals(List(5) { "Celts" }, namesOf(play(one, Freshness(true, most), seeded(), 5)))
+    }
+
+    @Test
+    fun t057_emptyPoolHasNothingToDraw() {
         val none = makeState(off = CIVS.map { it.name })
         assertEquals(emptyList<Int>(), logic.drawCandidates(none, Freshness(true, most)))
+    }
+
+    @Test
+    fun t058_nothingToPickFromGivesNoPick() {
         assertNull(Picker(seeded()).next(emptyList()))
     }
 
     @Test
-    fun `without a random source there's no pick`() {
+    fun t059_withoutARandomSourceThereIsNoPick() {
         assertNull(Picker(null).next(listOf(1, 2, 3)))
     }
 
     @Test
-    fun `the next draw is an even pick from the civs it can be`() {
-        val rng = seeded()
-        assertEven(countPicks(0..11, 24000) { Picker(rng).next((0..11).toList()) })
+    fun t060_nextDrawIsOneOfTheCivsItCanBe() {
+        assertEquals(emptyList<Int?>(), strays(picks(24000) { it.next((0..11).toList()) }, 0..11))
     }
 
     @Test
-    fun `the next draw stays an even pick when civs join`() {
-        val rng = seeded()
-        assertEven(countPicks(0..14, 30000) {
-            val picker = Picker(rng)
-            picker.next((0..9).toList())
-            picker.next((0..14).toList())
-        })
+    fun t061_nextDrawIsAnEvenPick() {
+        assertTrue("uneven picks", unevenness(picks(24000) { it.next((0..11).toList()) }, 0..11) < 1.0)
     }
 
     @Test
-    fun `the next draw stays an even pick when civs drop out`() {
-        val rng = seeded()
-        assertEven(countPicks(0..9, 20000) {
-            val picker = Picker(rng)
-            picker.next((0..14).toList())
-            picker.next((0..9).toList())
-        })
+    fun t062_nextDrawIsOneOfTheCivsWhenCivsJoin() {
+        assertEquals(emptyList<Int?>(), strays(picks(30000, ::joining), 0..14))
     }
 
     @Test
-    fun `the next draw stays an even pick when civs join and others drop out`() {
-        val rng = seeded()
-        assertEven(countPicks(5..14, 20000) {
-            val picker = Picker(rng)
-            picker.next((0..9).toList())
-            picker.next((5..14).toList())
-        })
+    fun t063_nextDrawStaysAnEvenPickWhenCivsJoin() {
+        assertTrue("uneven picks", unevenness(picks(30000, ::joining), 0..14) < 1.0)
     }
 
     @Test
-    fun `the next draw stays put while it can, so its jingle only loads once`() {
+    fun t064_nextDrawIsOneOfTheCivsLeftWhenCivsDropOut() {
+        assertEquals(emptyList<Int?>(), strays(picks(20000, ::dropping), 0..9))
+    }
+
+    @Test
+    fun t065_nextDrawStaysAnEvenPickWhenCivsDropOut() {
+        assertTrue("uneven picks", unevenness(picks(20000, ::dropping), 0..9) < 1.0)
+    }
+
+    @Test
+    fun t066_nextDrawIsOneOfTheNewCivsWhenCivsJoinAndOthersDropOut() {
+        assertEquals(emptyList<Int?>(), strays(picks(20000, ::swapping), 5..14))
+    }
+
+    @Test
+    fun t067_nextDrawStaysAnEvenPickWhenCivsJoinAndOthersDropOut() {
+        assertTrue("uneven picks", unevenness(picks(20000, ::swapping), 5..14) < 1.0)
+    }
+
+    @Test
+    fun t068_nextDrawStaysPutWhenTheCivsComeInAnotherOrder() {
+        assertEquals(0, movedPicks { from, _ -> from.reversed() })
+    }
+
+    @Test
+    fun t069_nextDrawStaysPutWhenOtherCivsDropOut() {
+        assertEquals(0, movedPicks { from, id -> from.filter { it == id || it % 2 == id % 2 } })
+    }
+
+    @Test
+    fun t070_afterADrawTheNextIsPickedFromTheCivsLeft() {
         val rng = seeded()
-        repeat(200) {
+        val outside = (1..200).count {
             val picker = Picker(rng)
-            val from = (0..19).toList()
-            val id = picker.next(from)!!
-            assertEquals("the same civs in another order", id, picker.next(from.reversed()))
-            assertEquals("other civs dropping out", id, picker.next(from.filter { it == id || it % 2 == id % 2 }))
+            val drawn = picker.next(twenty)
+            val left = twenty.filter { it != drawn }
+            picker.next(left) !in left
         }
+        assertEquals(0, outside)
     }
 
     @Test
-    fun `after a draw, the next one is picked again from the civs left`() {
-        val rng = seeded()
-        repeat(200) {
-            val picker = Picker(rng)
-            val from = (0..19).toList()
-            val drawn = picker.next(from)
-            val left = from.filter { it != drawn }
-            assertTrue(picker.next(left) in left)
-        }
+    fun t071_theMostFreshnessIsHalfThePoolInEveryEdition() {
+        val pools = EDITIONS.map { logic.editionTotal(it) }
+        assertEquals(pools.map { it / 2 }, pools.map { logic.freshLimit(it, most) })
     }
 }

@@ -1,5 +1,6 @@
-package net.frcp.app.ui
+package net.frcp.app.ui.widgets
 
+import net.frcp.app.ui.nineSlice
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -28,18 +29,24 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import net.frcp.app.Assets
+import net.frcp.app.device.Assets
+import net.frcp.app.ui.Grayscale
+import net.frcp.app.ui.Ink
+import net.frcp.app.ui.Label
+import net.frcp.app.ui.LocalImages
+import net.frcp.app.ui.drawCell
+import net.frcp.app.ui.drawPart
 import kotlin.math.roundToInt
 
-/** Draws the whole of [image] over the whole of this element. */
 fun Modifier.image(image: ImageBitmap) = drawBehind { drawPart(image, 0, 0, image.width, image.height) }
 
-/**
- * A wooden text button with a blackletter face, as the web version draws it. Its text turns gold and moves up and
- * right with the face of the pressed image. A phone has no blackletter font, so it's the serif type, as in a browser.
- */
 @Composable
-fun ParchmentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, size: DpSize = DpSize(100.dp, 30.dp)) {
+fun ParchmentButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: DpSize = DpSize(100.dp, 30.dp),
+) {
     val images = LocalImages.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -51,14 +58,11 @@ fun ParchmentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         contentAlignment = Alignment.Center,
     ) {
         val shift = if (pressed) 1.dp else 0.dp
-        Label(text, Modifier.offset(shift, -shift), size = 14.sp, color = if (pressed) Ink.ButtonPressed else Ink.ButtonText, oneLine = true)
+        val color = if (pressed) Ink.ButtonPressed else Ink.ButtonText
+        Label(text, Modifier.offset(shift, -shift), size = 14.sp, color = color, oneLine = true)
     }
 }
 
-/**
- * A button drawn from the 6 dp wooden nine-slice, pressed while held down or while [down] is set. Its content moves
- * up and right with the pressed face.
- */
 @Composable
 fun WoodButton(
     description: String,
@@ -80,7 +84,6 @@ fun WoodButton(
     ) { content(look) }
 }
 
-/** The share button: the share icon on a wooden button, 37 dp square. */
 @Composable
 fun ShareButton(description: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val icon = LocalImages.current[Assets.ui("share_icon")]
@@ -95,10 +98,6 @@ fun ShareButton(description: String, onClick: () -> Unit, modifier: Modifier = M
     }
 }
 
-/**
- * A wooden checkbox. The checkbox image has the unticked box above the ticked one, each with its pressed look on the
- * right.
- */
 @Composable
 fun CheckBox(checked: Boolean, pressed: Boolean, size: Dp = 16.dp) {
     val atlas = LocalImages.current[Assets.ui("checkbox")]
@@ -110,7 +109,6 @@ fun CheckBox(checked: Boolean, pressed: Boolean, size: Dp = 16.dp) {
     )
 }
 
-/** A checkbox and its label, which toggle together, pressed while held down. */
 @Composable
 fun CheckRow(
     text: String,
@@ -133,10 +131,6 @@ fun CheckRow(
     }
 }
 
-/**
- * The icon that stands in for a civ's or DLC's checkbox: the whole of [image], or its [cell] in an atlas of [cols]
- * cells per row. While it's off, it turns grey under the off cross, drawn at 90 % of its size.
- */
 @Composable
 fun ToggleIcon(image: ImageBitmap, on: Boolean, size: Dp, cell: Int? = null, cols: Int = 1) {
     val cross = LocalImages.current[Assets.ui("off")]
@@ -148,7 +142,7 @@ fun ToggleIcon(image: ImageBitmap, on: Boolean, size: Dp, cell: Int? = null, col
             if (!on) {
                 val side = (this.size.width * 0.9f).roundToInt()
                 val at = ((this.size.width - side) / 2).roundToInt()
-                drawPart(cross, 0, 0, cross.width, cross.height, dstOffset = IntOffset(at, at), dstSize = IntSize(side, side))
+                drawPart(cross, 0, 0, cross.width, cross.height, IntOffset(at, at), IntSize(side, side))
             }
         },
     )

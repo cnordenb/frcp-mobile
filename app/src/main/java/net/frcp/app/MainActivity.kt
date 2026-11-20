@@ -8,13 +8,14 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import net.frcp.app.picker.PickerFactory
+import net.frcp.app.picker.PickerViewModel
 import net.frcp.app.ui.AppScreen
 
 class MainActivity : ComponentActivity() {
-    private val vm: PickerViewModel by viewModels { PickerViewModel.Factory }
+    private val vm: PickerViewModel by viewModels { PickerFactory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The page runs under the status bar, whose icons are dark on it. The navigation bar's are set by AppScreen.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),

@@ -1,4 +1,4 @@
-package net.frcp.app
+package net.frcp.app.picker
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -9,11 +9,6 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.put
 import net.frcp.app.logic.Freshness
 
-/**
- * The user's settings, with the web version's names and defaults: continuous freshness on at the most, legacy jingles,
- * and neither a draw nor a new round when the app opens. The web version's tooltip and hotkey settings have no use on a
- * phone, so the app leaves them out.
- */
 data class Settings(
     val showName: Boolean = true,
     val showIcon: Boolean = true,
@@ -49,10 +44,8 @@ data class Settings(
     }.toString()
 
     companion object {
-        /** A freshness setting at or above half the pool means "the most", so it follows the pool's size. */
         const val FRESH_MOST = 1000
 
-        /** Reads saved settings, keeping the default of each one that's missing or of the wrong type. */
         fun parse(raw: String?): Settings {
             val d = Settings()
             val data = raw?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() } as? JsonObject ?: return d

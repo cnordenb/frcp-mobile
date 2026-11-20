@@ -1,27 +1,34 @@
 package net.frcp.app.ui
 
 import androidx.compose.ui.unit.dp
-import net.frcp.app.Assets
+import net.frcp.app.device.Assets
 import net.frcp.app.logic.image
 import net.frcp.app.logic.pngSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.FixMethodOrder
 import org.junit.Test
+import org.junit.runners.MethodSorters
 import java.awt.image.BufferedImage
 import kotlin.math.abs
 
-// The page art, background.png, and its tab strips, draw_tab.png and so on, against the places Page measures
-// on them: their sizes, the seam where a strip meets the page, the tabs under their touch boxes and the parchment
-// under the tabs' content. New art that fails these needs Page's places measured again.
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class PageArtTest {
     private val page = image(Assets.page("background"))
     private val strips = (0..2).map { image(Page.strip(it)) }
     private val stripTop = Page.STRIP_TOP.toInt()
+    private val labelRow = ((Page.TAB_TOP + Page.TAB_BOTTOM) / 2 - Page.STRIP_TOP).toInt()
+    private val cropLeft = Page.CROP_LEFT.toInt()
+    private val cropRight = Page.CROP_RIGHT.toInt() - 1
+    private val cropTop = Page.CROP_TOP.toInt()
+    private val cropBottom = Page.CROP_BOTTOM.toInt() - 1
+    private val halfWidth = (Page.CROP_RIGHT - Page.CROP_LEFT) / 2
+    private val halfHeight = (Page.CROP_BOTTOM - Page.CROP_TOP) / 2
+    private val halfPage = Page(halfWidth.dp, halfHeight.dp)
 
     private fun alpha(argb: Int) = argb ushr 24
-    private fun channels(argb: Int) = intArrayOf(argb shr 16 and 0xff, argb shr 8 and 0xff, argb and 0xff)
+    private fun channels(argb: Int) = listOf(argb shr 16 and 0xff, argb shr 8 and 0xff, argb and 0xff)
 
-    /** The art's opacity at (x, y) with the strip drawn over the page. */
     private fun opacity(strip: BufferedImage, x: Int, y: Int): Float {
         val p = alpha(page.getRGB(x, y)) / 255f
         if (y < stripTop) return p
@@ -29,108 +36,147 @@ class PageArtTest {
         return s + p * (1 - s)
     }
 
+    private fun difference(s: Int, p: Int): Int {
+        val alphas = abs(alpha(s) - alpha(p))
+        if (alpha(s) != 255 || alpha(p) != 255) return alphas
+        return maxOf(alphas, channels(s).zip(channels(p)).maxOf { (a, b) -> abs(a - b) })
+    }
+
+    private fun seamDifference(strip: BufferedImage) = (0 until SEAM_ROWS).maxOf { y ->
+        (0 until strip.width).maxOf { x -> difference(strip.getRGB(x, y), page.getRGB(x, stripTop + y)) }
+    }
+
+    private fun firstShowingOutsideTheCrop(strip: BufferedImage): String? {
+        for (y in 0 until page.height) {
+            for (x in 0 until page.width) {
+                val inside = x in cropLeft..cropRight && y in cropTop..cropBottom
+                if (!inside && opacity(strip, x, y) >= SHOWS) return "($x, $y)"
+            }
+        }
+        return null
+    }
+
     @Test
-    fun `the page and its strips are the sizes Page measures them in`() {
+    fun t278_pageIsTheSizePageMeasuresItIn() {
         assertEquals(Page.ART_WIDTH.toInt() to Page.ART_HEIGHT.toInt(), pngSize(Assets.page("background")))
-        for (t in 0..2) assertEquals(Page.ART_WIDTH.toInt() to Page.STRIP_HEIGHT.toInt(), pngSize(Page.strip(t)))
+    }
+
+    @Test
+    fun t279_stripsAreTheSizePageMeasuresThemIn() {
+        val size = Page.ART_WIDTH.toInt() to Page.STRIP_HEIGHT.toInt()
+        assertEquals(listOf(size, size, size), (0..2).map { pngSize(Page.strip(it)) })
+    }
+
+    @Test
+    fun t280_stripsReachFromTheirTopToThePagesBottom() {
         assertEquals(Page.ART_HEIGHT, Page.STRIP_TOP + Page.STRIP_HEIGHT, 0f)
     }
 
     @Test
-    fun `each strip's top rows are the page's own, so it meets the page without a seam`() {
-        for ((t, strip) in strips.withIndex()) {
-            var worst = 0
-            for (y in 0 until SEAM_ROWS) {
-                for (x in 0 until strip.width) {
-                    val s = strip.getRGB(x, y)
-                    val p = page.getRGB(x, stripTop + y)
-                    worst = maxOf(worst, abs(alpha(s) - alpha(p)))
-                    if (alpha(s) == 255 && alpha(p) == 255) {
-                        val a = channels(s)
-                        val b = channels(p)
-                        for (c in 0..2) worst = maxOf(worst, abs(a[c] - b[c]))
-                    }
-                }
-            }
-            assertTrue("strip $t differs from the page by up to $worst in its top $SEAM_ROWS rows", worst <= 2)
-        }
+    fun t281_eachStripsTopRowsAreThePagesOwnSoItMeetsThePageWithoutASeam() {
+        val seams = strips.withIndex().filter { (_, strip) -> seamDifference(strip) > 2 }
+            .map { (t, strip) -> "strip $t differs from the page by up to ${seamDifference(strip)}" }
+        assertEquals(emptyList<String>(), seams)
     }
 
     @Test
-    fun `each tab's touch box covers its drawn tab, and leaves out the gaps between tabs`() {
-        // The middle of the tabs' labels
-        val row = ((Page.TAB_TOP + Page.TAB_BOTTOM) / 2 - Page.STRIP_TOP).toInt()
-        for ((t, strip) in strips.withIndex()) {
-            for ((l, r) in Page.TABS) {
+    fun t282_eachTabsTouchBoxCoversItsDrawnTab() {
+        val uncovered = strips.withIndex().flatMap { (t, strip) ->
+            Page.TABS.filter { (l, r) ->
                 val columns = l.toInt()..r.toInt()
-                val opaque = columns.count { alpha(strip.getRGB(it, row)) == 255 }
-                assertTrue("strip $t: the tab box $l to $r is over $opaque opaque pixels of ${columns.count()}", opaque >= 0.95 * columns.count())
-            }
-            for ((a, b) in Page.TABS.zipWithNext()) {
-                assertTrue(a.second < b.first)
-                val gap = ((a.second + b.first) / 2).toInt()
-                assertTrue("strip $t: the gap between tabs at $gap px is see-through", alpha(strip.getRGB(gap, row)) < 255)
-            }
+                columns.count { alpha(strip.getRGB(it, labelRow)) == 255 } < 0.95 * columns.count()
+            }.map { (l, r) -> "strip $t: the tab box $l to $r" }
         }
+        assertEquals(emptyList<String>(), uncovered)
     }
 
     @Test
-    fun `the tabs' content lies on the page, which is opaque all along the content's edges`() {
+    fun t283_tabsTouchBoxesRunLeftToRightWithoutOverlap() {
+        val overlaps = Page.TABS.zipWithNext().filter { (a, b) -> a.second >= b.first }.map { (a, b) -> "$a and $b" }
+        assertEquals(emptyList<String>(), overlaps)
+    }
+
+    @Test
+    fun t284_gapsBetweenTheTabsAreSeeThrough() {
+        val opaque = strips.withIndex().flatMap { (t, strip) ->
+            Page.TABS.zipWithNext().map { (a, b) -> ((a.second + b.first) / 2).toInt() }
+                .filter { alpha(strip.getRGB(it, labelRow)) == 255 }
+                .map { "strip $t: the gap at $it px" }
+        }
+        assertEquals(emptyList<String>(), opaque)
+    }
+
+    @Test
+    fun t285_pageIsOpaqueAllAlongTheEdgesOfTheTabsContent() {
         val left = Page.INNER_LEFT.toInt()
         val right = Page.INNER_RIGHT.toInt() - 1
         val top = Page.INNER_TOP.toInt()
         val bottom = Page.PAGE_BOTTOM.toInt() - 1
-        for ((t, strip) in strips.withIndex()) {
-            val edges = (left..right).flatMap { listOf(it to top, it to bottom) } + (top..bottom).flatMap { listOf(left to it, right to it) }
+        val rows = (left..right).flatMap { listOf(it to top, it to bottom) }
+        val edges = rows + (top..bottom).flatMap { listOf(left to it, right to it) }
+        val faint = strips.withIndex().mapNotNull { (t, strip) ->
             val (x, y) = edges.minBy { (x, y) -> opacity(strip, x, y) }
-            assertTrue("with strip $t, the art at ($x, $y) is only ${opacity(strip, x, y)} opaque", opacity(strip, x, y) >= 250 / 255f)
+            val least = opacity(strip, x, y)
+            "with strip $t, ($x, $y) is only $least opaque".takeIf { least < 250 / 255f }
         }
+        assertEquals(emptyList<String>(), faint)
     }
 
     @Test
-    fun `the crop takes in all of the art that shows`() {
-        val crop = Page.CROP_LEFT.toInt() until Page.CROP_RIGHT.toInt()
-        val cropRows = Page.CROP_TOP.toInt() until Page.CROP_BOTTOM.toInt()
-        for ((t, strip) in strips.withIndex()) {
-            for (y in 0 until page.height) {
-                for (x in 0 until page.width) {
-                    if (x in crop && y in cropRows) continue
-                    assertTrue("with strip $t, ($x, $y) shows outside the crop", opacity(strip, x, y) < SHOWS)
-                }
-            }
+    fun t286_cropTakesInAllOfTheArtThatShows() {
+        val outside = strips.withIndex().mapNotNull { (t, strip) ->
+            firstShowingOutsideTheCrop(strip)?.let { "with strip $t, $it shows outside the crop" }
         }
+        assertEquals(emptyList<String>(), outside)
     }
 
     @Test
-    fun `the crop leaves no margin of its own, as the art shows at each of its edges`() {
-        val left = Page.CROP_LEFT.toInt()
-        val right = Page.CROP_RIGHT.toInt() - 1
-        val top = Page.CROP_TOP.toInt()
-        val bottom = Page.CROP_BOTTOM.toInt() - 1
-        val strip = strips[0]
-        assertTrue((top..bottom).any { opacity(strip, left, it) >= SHOWS })
-        assertTrue((top..bottom).any { opacity(strip, right, it) >= SHOWS })
-        assertTrue((left..right).any { opacity(strip, it, top) >= SHOWS })
-        assertTrue((left..right).any { opacity(strip, it, bottom) >= SHOWS })
+    fun t287_artShowsAtTheCropsLeftEdge() {
+        assertTrue((cropTop..cropBottom).any { opacity(strips[0], cropLeft, it) >= SHOWS })
     }
 
     @Test
-    fun `Page scales the crop to the size it's drawn at`() {
-        val cropWidth = Page.CROP_RIGHT - Page.CROP_LEFT
-        val cropHeight = Page.CROP_BOTTOM - Page.CROP_TOP
-        val half = Page((cropWidth / 2).dp, (cropHeight / 2).dp)
-        assertEquals((Page.INNER_LEFT - Page.CROP_LEFT) / 2, half.left.value, 0.001f)
-        assertEquals((Page.CROP_RIGHT - Page.INNER_RIGHT) / 2, half.right.value, 0.001f)
-        assertEquals((Page.INNER_TOP - Page.CROP_TOP) / 2, half.top.value, 0.001f)
-        assertEquals((Page.CROP_BOTTOM - Page.PAGE_BOTTOM) / 2, half.bottom.value, 0.001f)
-        assertEquals((Page.TAB_TOP - Page.CROP_TOP) / 2, half.tabTop.value, 0.001f)
+    fun t288_artShowsAtTheCropsRightEdge() {
+        assertTrue((cropTop..cropBottom).any { opacity(strips[0], cropRight, it) >= SHOWS })
+    }
+
+    @Test
+    fun t289_artShowsAtTheCropsTopEdge() {
+        assertTrue((cropLeft..cropRight).any { opacity(strips[0], it, cropTop) >= SHOWS })
+    }
+
+    @Test
+    fun t290_artShowsAtTheCropsBottomEdge() {
+        assertTrue((cropLeft..cropRight).any { opacity(strips[0], it, cropBottom) >= SHOWS })
+    }
+
+    @Test
+    fun t291_pageScalesItsLeftMarginToTheSizeItIsDrawnAt() {
+        assertEquals((Page.INNER_LEFT - Page.CROP_LEFT) / 2, halfPage.left.value, 0.001f)
+    }
+
+    @Test
+    fun t292_pageScalesItsRightMarginToTheSizeItIsDrawnAt() {
+        assertEquals((Page.CROP_RIGHT - Page.INNER_RIGHT) / 2, halfPage.right.value, 0.001f)
+    }
+
+    @Test
+    fun t293_pageScalesItsTopMarginToTheSizeItIsDrawnAt() {
+        assertEquals((Page.INNER_TOP - Page.CROP_TOP) / 2, halfPage.top.value, 0.001f)
+    }
+
+    @Test
+    fun t294_pageScalesItsBottomMarginToTheSizeItIsDrawnAt() {
+        assertEquals((Page.CROP_BOTTOM - Page.PAGE_BOTTOM) / 2, halfPage.bottom.value, 0.001f)
+    }
+
+    @Test
+    fun t295_pageScalesTheTabsTopToTheSizeItIsDrawnAt() {
+        assertEquals((Page.TAB_TOP - Page.CROP_TOP) / 2, halfPage.tabTop.value, 0.001f)
     }
 
     private companion object {
-        /** How many of a strip's top rows to hold to the page's: all three strips keep to it for their top 45. */
         const val SEAM_ROWS = 40
-
-        /** How opaque a pixel is when it shows, as Page's crop counts it: half opaque or more. */
         const val SHOWS = 128 / 255f
     }
 }

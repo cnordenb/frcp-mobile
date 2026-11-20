@@ -1,4 +1,4 @@
-package net.frcp.app.ui
+package net.frcp.app.ui.tabs
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,13 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import net.frcp.app.PickerViewModel
+import net.frcp.app.picker.PickerViewModel
+import net.frcp.app.ui.Label
+import net.frcp.app.ui.widgets.CheckRow
+import net.frcp.app.ui.widgets.ParchmentButton
+import net.frcp.app.ui.widgets.ShareButton
 
-/**
- * The Log tab, as frcp.net's phone layout: the counts over the logs, the logs filling the middle, and under them Clear
- * Log and the share button below the drawn log, and Show below the remaining one. The drawn log is the wider, as its
- * lines are the longer.
- */
 @Composable
 fun LogTab(vm: PickerViewModel, pageTop: Dp) {
     val view = vm.view
@@ -39,7 +38,8 @@ fun LogTab(vm: PickerViewModel, pageTop: Dp) {
             LogPanel(view.drawnRounds, "Drawn civs, newest first", Modifier.weight(5f).fillMaxHeight())
             Spacer(Modifier.width(10.dp))
             if (showRemaining) {
-                LogPanel(listOf(view.remainingRows), "Civs left to draw this round", Modifier.weight(4f).fillMaxHeight())
+                val left = listOf(view.remainingRows)
+                LogPanel(left, "Civs left to draw this round", Modifier.weight(4f).fillMaxHeight())
             } else {
                 Spacer(Modifier.weight(4f))
             }

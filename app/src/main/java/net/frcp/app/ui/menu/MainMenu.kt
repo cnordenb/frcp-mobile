@@ -1,4 +1,4 @@
-package net.frcp.app.ui
+package net.frcp.app.ui.menu
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,15 +33,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import net.frcp.app.Assets
-import net.frcp.app.PickerViewModel
+import net.frcp.app.device.Assets
+import net.frcp.app.logic.Preset
+import net.frcp.app.picker.PickerViewModel
+import net.frcp.app.ui.Ink
+import net.frcp.app.ui.Label
+import net.frcp.app.ui.LocalImages
+import net.frcp.app.ui.drawPart
+import net.frcp.app.ui.widgets.WoodButton
 import kotlin.math.roundToInt
 
-/**
- * The hamburger menu at the top right, which stands in for the desktop layout's menu bar as on frcp.net's phone
- * layout: three cream bars on a wooden button, pressed while the menu is open, over a dark brown list whose items turn
- * gold while pressed. The items that open another site have the external icon in their left margin.
- */
 @Composable
 fun MainMenu(vm: PickerViewModel, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.End) {
@@ -98,7 +99,6 @@ private fun MenuItem(text: String, external: Boolean = false, onClick: () -> Uni
             .clickable(source, null, role = Role.Button, onClick = onClick)
             .drawBehind {
                 if (!external) return@drawBehind
-                // The external icon is drawn in the menu text's colour, so it turns black with the text when pressed.
                 val side = 12.dp.toPx().roundToInt()
                 drawPart(
                     icon, 0, 0, icon.width, icon.height,

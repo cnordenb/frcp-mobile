@@ -1,17 +1,12 @@
-package net.frcp.app
+package net.frcp.app.device
 
 import android.content.Context
 
-/**
- * The saved settings and state, as JSON under the web version's keys and in its format, so a state can move between
- * the two.
- */
 interface Store {
     var settings: String?
     var state: String?
 }
 
-/** The [Store] in the app's shared preferences, which stay on this device. */
 class PrefsStore(context: Context) : Store {
     private val prefs = context.getSharedPreferences("frcp", Context.MODE_PRIVATE)
 

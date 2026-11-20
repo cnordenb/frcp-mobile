@@ -1,4 +1,4 @@
-package net.frcp.app
+package net.frcp.app.device
 
 import android.content.ContentResolver
 import android.net.Uri
@@ -8,23 +8,19 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
-/** A file read for a preset: its name, if it has one, and its text, null when it can't be read or is too long. */
 class ReadFile(val name: String?, val text: String?)
 
-/** The preset files the user picks to save to and load from. */
 interface PresetFiles {
-    /** Writes [text] to the file at [uri], and says whether it could. */
     suspend fun write(uri: Uri, text: String): Boolean
 
-    /** Reads the file at [uri], up to [max] bytes of it. */
     suspend fun read(uri: Uri, max: Int): ReadFile
 }
 
-/** [PresetFiles] through Android's document providers, away from the screen's thread. */
 class DocumentFiles(private val resolver: ContentResolver) : PresetFiles {
     override suspend fun write(uri: Uri, text: String) = withContext(Dispatchers.IO) {
         runCatching {
-            val out = runCatching { resolver.openOutputStream(uri, "wt") }.getOrNull() ?: resolver.openOutputStream(uri, "w")
+            val truncating = runCatching { resolver.openOutputStream(uri, "wt") }.getOrNull()
+            val out = truncating ?: resolver.openOutputStream(uri, "w")
             checkNotNull(out).use { it.write(text.toByteArray()) }
         }.isSuccess
     }
@@ -38,7 +34,6 @@ class DocumentFiles(private val resolver: ContentResolver) : PresetFiles {
         ReadFile(name, runCatching { resolver.openInputStream(uri)?.use { readText(it, max) } }.getOrNull())
     }
 
-    /** The text of a file up to max bytes long, or null for a longer one. */
     private fun readText(input: InputStream, max: Int): String? {
         val out = ByteArrayOutputStream()
         val chunk = ByteArray(8192)
