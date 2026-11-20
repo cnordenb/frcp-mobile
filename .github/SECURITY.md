@@ -1,1 +1,1 @@
-Discovered vulnerabilities can be informed of privately to {{SECURITY_CONTACT}}.
+Discovered vulnerabilities can be informed of privately with direct message to hjoerleif on discord.
