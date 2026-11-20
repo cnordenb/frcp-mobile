@@ -6,6 +6,14 @@
 
 # Fresh Random Civ Picker for Android
 
+## But why?
+
+In Age of Empires II: Definitive Edition, there are 56 and counting civilisations. You can pick random in the game, but not without the risk of having to replay the same civ twice in the same session or even twice in a row. Why would you want to replay a civ during the day when there's over half a hundred unique civs in the game you paid for. Why should you have to give up the adventure of randomness to experience variety? You shouldn't.
+
+Fresh Random Civ Picker solves this problem completely, no custom pool toggling here and there, just draw and forget. Both fresh and random, guaranteed.
+
+Why a mobile app? I wanted more ways to reach potential users. Also, I can listen to jingles and stare at civ icons when I don't have internet on the ferry.
+
 ## Description
 
 The app version of [frcp.net](https://frcp.net/): it draws a fresh random civilisation for Age of Empires II, and every enabled civ comes up once before any civ repeats. Written in Kotlin with Jetpack Compose, it follows frcp.net's phone layout and its parchment look.
