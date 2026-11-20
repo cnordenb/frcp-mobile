@@ -1,1 +1,1 @@
-Discovered vulnerabilities can be informed of privately with direct message to hjoerleif on discord.
+Discovered vulnerabilities can be informed of privately at https://github.com/cnordenb/frcp-mobile/security/advisories/new
